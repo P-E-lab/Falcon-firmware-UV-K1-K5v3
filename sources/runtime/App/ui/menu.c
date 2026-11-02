@@ -243,19 +243,18 @@ void UI_MENU_ShowCategories(bool show)
     gMenuCategories = show;
 }
 
-// Leaving the menu from the category screen: the next MENU reopens the last
-// category opened, on its last entry.
+// Leaving the menu: as F4HWN, MENU reopens the category screen on the last
+// category opened (not the one merely highlighted).
 void UI_MENU_Close(void)
 {
-    if (gMenuCategories) {
-        gMenuCursor = gMenuCategory;
-        UI_MENU_ShowCategories(false);
-    }
+    UI_MENU_ShowCategories(true);
+    gMenuCursor = gMenuCategory;
 }
 
 void UI_MENU_InitList(void)
 {
-    gMenuListCount = UI_MENU_CategorySize(MENU_CAT_ALL);
+    gMenuCategories = true;
+    gMenuListCount = MENU_CAT_COUNT;
 }
 
 const uint8_t FIRST_HIDDEN_MENU_ITEM = MENU_F_LOCK;

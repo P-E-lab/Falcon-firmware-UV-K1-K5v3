@@ -868,6 +868,21 @@ static NATIVE_CODE(menukeys) void MENU_Key_0_to_9(KEY_Code_t Key, bool bKeyPress
 
     gRequestDisplayScreen = DISPLAY_MENU;
 
+    if (gMenuCategories) { // as F4HWN: a number opens ALL on that entry
+        if (gInputBoxIndex >= 2) {
+            gInputBoxIndex = 0;
+            Value = (gInputBox[0] * 10) + gInputBox[1];
+        } else
+            Value = gInputBox[0];
+        if (Value > 0 && Value <= UI_MENU_CategorySize(MENU_CAT_ALL)) {
+            gMenuCursor = MENU_CAT_ALL;
+            UI_MENU_ShowCategories(false);
+            gMenuCursor = Value - 1;
+            gFlagRefreshSetting = true;
+        }
+        return;
+    }
+
     if (!gIsInSubMenu) {
         switch (gInputBoxIndex) {
             case 2:

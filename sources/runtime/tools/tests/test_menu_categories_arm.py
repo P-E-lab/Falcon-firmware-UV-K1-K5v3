@@ -1,8 +1,8 @@
 """Actual ARM: the menu categories (ui/menu.c, app/menu.c). ALL lists the whole
 MenuList; the other categories hold every other entry exactly once. EXIT goes
 from the entries to the category screen, MENU opens the highlighted category,
-each level keeps its cursor, digits pick a category, and leaving the menu
-from the category screen reopens the last category opened on its last entry.
+each level keeps its cursor and, as F4HWN, the menu reopens on the category
+screen at the last category opened; a number typed there opens ALL on it.
 Writes the screens as PNG (x4) when given an output directory."""
 import sys
 from harness import *
@@ -110,28 +110,33 @@ key(KEY_MENU)
 assert state() == (0, 1, 2, 17) and current() == 'RxDCS', state()
 print('PASS keys: EXIT shows the categories, MENU opens one, each keeps its cursor')
 
-# Digits pick a category: 1 then 0 is SERVICE.
-key(KEY_EXIT)
-key(1)
-key(0)
-assert state()[:3] == (1, 1, 9), state()
-key(KEY_MENU)
-assert current() == 'F Lock' and state()[3] == 4, (current(), state())
-print('PASS digits: 10 selects SERVICE on the category screen')
-
-# EXIT from the categories leaves the menu; MENU reopens the last category
-# opened (SERVICE), even after moving to another one before leaving.
-key(KEY_EXIT)
-key(KEY_UP)
+# Leaving the menu, from the entries or the categories, reopens the category
+# screen on the last category opened, not on the one merely highlighted.
+leave_menu()
+assert state() == (1, 1, 1, 10), state()
+key(KEY_DOWN)
+key(KEY_DOWN)
 key(KEY_EXIT)
 assert get('gRequestDisplayScreen') == DISPLAY_MAIN
 leave_menu()
-assert state() == (0, 9, 0, 4) and current() == 'F Lock', state()
-# Leaving from the entries keeps them.
-key(KEY_DOWN)
+assert state() == (1, 1, 1, 10), state()
+key(KEY_MENU)
+assert current() == 'RxDCS', current()
+print('PASS leaving: MENU reopens the category screen on the last category opened')
+
+# A number on the category screen opens ALL on that entry: 1 opens 01, 0 makes 10.
+key(KEY_EXIT)
+key(1)
+assert state() == (0, 0, 0, menu_count), state()
+key(0)
+assert state() == (0, 0, 9, menu_count) and current() == menu[9][0], (state(), current())
 leave_menu()
-assert state() == (0, 9, 1, 4) and current() == 'BatCal', state()
-print('PASS leaving: the menu reopens on the last category opened and its entry')
+assert state() == (1, 0, 0, 10), state()
+key(7)
+key(9)
+assert state()[:3] == (0, 0, 8), state()   # 79 > 62 entries: 9 alone, as in the entries
+leave_menu()
+print('PASS digits: a number on the category screen opens ALL on that entry')
 
 # Screens: category screen, entries of a category, battery text rules.
 if len(sys.argv) > 1:
@@ -165,8 +170,8 @@ def header_gap():
 put16(addr('gBatteryVoltageAverage'), 812)
 for mode in (3, 2):
     put8(addr('gSetting_battery_text'), mode)
-    key(KEY_EXIT)                                 # category screen on SERVICE
-    key(1)                                        # 01 ALL
+    leave_menu()                                  # category screen
+    put8(addr('gMenuCursor'), 0)                  # 01 ALL
     call('UI_DisplayMenu', count=50000000)
     shot('menu-categories-bat%u' % mode)
     st_all = bytes(u.mem_read(addr('gStatusLine'), 128))
