@@ -34,8 +34,13 @@ static NATIVE_CODE(vfo) void UI_MAIN_DrawFullWatchPriorities(void)
     if (!ml && count == 0)
         return;
 
-    /* Bubble texts, innermost first on each side; a Full Watch priority
-     * already shown on a VFO gets no bubble. */
+    /* Bubble texts, innermost first on each side; a channel already shown
+     * on a VFO gets no bubble (the displaced VFO of a priority swap does). */
+    uint16_t onScreen[2];
+    for (uint8_t v = 0; v < 2; v++) {
+        const VFO_Info_t *info = APP_GetFullWatchDisplayVfo(v);
+        onScreen[v] = info ? info->CHANNEL_SAVE : gEeprom.ScreenChannel[v];
+    }
     const uint8_t half = (count + 1u) / 2u;
     char text[4][5];
     bool shown[4];
@@ -44,7 +49,7 @@ static NATIVE_CODE(vfo) void UI_MAIN_DrawFullWatchPriorities(void)
         const uint8_t i = position < half ? half - 1u - position : position;
         const VFO_Info_t *vfo = vfos[i];
         const uint16_t channel = vfo->CHANNEL_SAVE;
-        shown[position] = channel != gEeprom.ScreenChannel[0] && channel != gEeprom.ScreenChannel[1];
+        shown[position] = channel != onScreen[0] && channel != onScreen[1];
         if (!shown[position])
             continue;
         if (IS_MR_CHANNEL(channel))
