@@ -487,27 +487,30 @@ static NATIVE_CODE(menu) void DisplayMenuNative(void)
         first = gMenuCursor - 5;
     if (first + 6 > gMenuListCount)
         first = gMenuListCount > 6 ? gMenuListCount - 6 : 0;
-    // The category screen widens the name column for CHANNELS.
-    const int sep = gMenuCategories ? 67 : 60;
     for (unsigned row = 0; row < 6 && first + row < gMenuListCount; ++row) {
         const unsigned idx = first + row;
         const int y = 15 + 9 * row;
         const bool selected = idx == gMenuCursor;
-        if (selected) {
+        // Categories: the name alone, in a square highlight up to the bar.
+        if (selected && gMenuCategories) {
+            MenuBox(0, y - 6, 60, 7, true);
+        } else if (selected) {
             MenuBox(0, y - 6, 14, 7, true);
-            MenuBox(17, y - 6, sep - 17, 7, true);
+            MenuBox(17, y - 6, 43, 7, true);
             MenuPixel(13, y - 6, false);
             MenuPixel(13, y, false);
             MenuPixel(17, y - 6, false);
             MenuPixel(17, y, false);
         }
-        sprintf(s, ns_menu_5, idx + 1);
-        MenuText(s, 1, y, 12, !selected);
+        if (!gMenuCategories) {
+            sprintf(s, ns_menu_5, idx + 1);
+            MenuText(s, 1, y, 12, !selected);
+        }
         UI_MENU_ItemName(s, idx);
-        MenuText(s, 19, y, sep, !selected);
+        MenuText(s, gMenuCategories ? 2 : 19, y, 60, !selected);
     }
     const int bottom = 15 + 9 * ((gMenuListCount - first < 6 ? gMenuListCount - first : 6) - 1);
-    MenuBox(sep, 9, 1, bottom - 8, true);
+    MenuBox(60, 9, 1, bottom - 8, true);
     const int valueY = (9 + bottom + 5) / 2;
     MenuOption(m, gSubMenuSelection, s);
     if (gMenuCategories)
@@ -529,10 +532,10 @@ static NATIVE_CODE(menu) void DisplayMenuNative(void)
     }
     const char *second = strchr(s, '\n');
     if (second) {
-        MenuCentered(s, sep + 2, 127, valueY - 3, true);
-        MenuCentered(second + 1, sep + 2, 127, valueY + 4, true);
+        MenuCentered(s, 62, 127, valueY - 3, true);
+        MenuCentered(second + 1, 62, 127, valueY + 4, true);
     } else
-        MenuCentered(s, sep + 2, 127, valueY, true);
+        MenuCentered(s, 62, 127, valueY, true);
     if (gIsInSubMenu || gAskForConfirmation) {
         char title[7];
         FP_CopyString(title, MenuList[UI_MENU_ItemIndex(gMenuCursor)].name, sizeof title);
