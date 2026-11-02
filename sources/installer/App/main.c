@@ -196,6 +196,13 @@ static uint8_t page[256];
 static uint8_t store_head[STORE_DATA_OFFSET]; /* written last */
 static uint32_t ip, op, page_start, page_len;
 static uint32_t fwlen, storelen, slot;
+/* The payload holds Thumb BL offsets as absolute targets (thumb_filter in
+ * tools/build_payload.py). Inflate produces that filtered stream up to `op`;
+ * bytes from `wp` on wait in `pend` until their BL, if any, is complete. */
+static uint8_t pend[4];
+static uint32_t wp;
+static uint8_t cache[16]; /* raw bytes read back from flash */
+static uint32_t cache_pos, cache_len;
 
 static uint32_t crc_update(uint32_t c, const uint8_t *p, uint32_t n)
 {
@@ -281,6 +288,121 @@ static bool flush_page(void)
     return ok;
 }
 
+/* Writes the raw byte of position `wp`. */
+static bool emit(uint8_t b)
+{
+    const uint32_t total = fwlen + storelen;
+    if (in_store_head(wp)) {
+        store_head[wp - fwlen] = b;
+    } else {
+        if (!page_len)
+            page_start = wp;
+        page[page_len++] = b;
+        /* A page ends at a physical 256-byte boundary or at a part end. */
+        if ((address(wp) & 255u) == 255u || wp + 1 == fwlen || wp + 1 == total) {
+            if (!flush_page())
+                return false;
+            install_update(5u + (wp + 1u) * 90u / total);
+        }
+    }
+    wp++;
+    return true;
+}
+
+/* Raw byte of an already written position. */
+static bool raw_at(uint32_t at, uint8_t *b)
+{
+    if (in_store_head(at)) {
+        *b = store_head[at - fwlen];
+    } else if (page_len && at >= page_start) {
+        *b = page[at - page_start];
+    } else if (at >= fwlen && store_skipped(at - fwlen)) {
+        *b = 0xFF;
+    } else {
+        if (at - cache_pos >= cache_len) {
+            /* Only flushed bytes, which never change, are cached. */
+            const uint32_t limit = (page_len ? page_start : wp) - at;
+            cache_pos = at;
+            cache_len = run_length(at, limit < sizeof cache ? limit : sizeof cache);
+            if (INS_Read(address(at), cache, cache_len))
+                return false;
+        }
+        *b = cache[at - cache_pos];
+    }
+    return true;
+}
+
+static bool bl_start(uint8_t second, uint8_t fourth)
+{
+    return (second & 0xF8u) == 0xF0u && (fourth & 0xF8u) == 0xF8u;
+}
+
+/* BL at even position `pos`: absolute target <-> relative offset. */
+static void bl_convert(uint8_t *g, uint32_t pos, bool to_absolute)
+{
+    uint32_t v = (g[1] & 7u) << 19 | (uint32_t)g[0] << 11 | (g[3] & 7u) << 8 | g[2];
+    v = to_absolute ? v + ((pos + 4u) >> 1) : v - ((pos + 4u) >> 1);
+    g[0] = (uint8_t)(v >> 11);
+    g[1] = (uint8_t)(0xF0u | (v >> 19 & 7u));
+    g[2] = (uint8_t)v;
+    g[3] = (uint8_t)(0xF8u | (v >> 8 & 7u));
+}
+
+/* Filtered byte of position `at` < op, as inflate wrote it. */
+static bool filtered_at(uint32_t at, uint8_t *b)
+{
+    if (at >= wp) {
+        *b = pend[at & 3u];
+        return true;
+    }
+    /* The BL holding `at` starts at `at` & ~1 or 2 bytes before; a converted
+     * BL was written whole, so it ends before wp. */
+    const uint32_t even = at & ~1u;
+    for (uint32_t i = 0; i < 2u && 2u * i <= even; i++) {
+        const uint32_t g = even - 2u * i;
+        uint8_t q[4];
+        if (g + 3u >= wp)
+            continue;
+        for (unsigned k = 0; k < 4; k++)
+            if (!raw_at(g + k, &q[k]))
+                return false;
+        if (bl_start(q[1], q[3])) {
+            bl_convert(q, g, true);
+            *b = q[at - g];
+            return true;
+        }
+    }
+    return raw_at(at, b);
+}
+
+/* Writes the pending bytes whose BL, if any, is complete (all at `end`). */
+static bool drain(bool end)
+{
+    while (wp < op) {
+        const uint32_t n = op - wp;
+        if (!(wp & 1u) && !end && n < 2u)
+            return true; /* its second byte tells whether a BL starts here */
+        if (!(wp & 1u) && n >= 2u && (pend[(wp + 1u) & 3u] & 0xF8u) == 0xF0u) {
+            if (n < 4u) {
+                if (!end)
+                    return true;
+            } else if ((pend[(wp + 3u) & 3u] & 0xF8u) == 0xF8u) {
+                uint8_t g[4];
+                for (unsigned k = 0; k < 4; k++)
+                    g[k] = pend[(wp + k) & 3u];
+                bl_convert(g, wp, false);
+                for (unsigned k = 0; k < 4; k++)
+                    if (!emit(g[k]))
+                        return false;
+                continue;
+            }
+        }
+        if (!emit(pend[wp & 3u]))
+            return false;
+    }
+    return true;
+}
+
 /* Inflate output: literal (distance 0) or copy from `distance` bytes back. */
 static bool output(void *unused, unsigned distance, unsigned count, uint8_t literal)
 {
@@ -290,31 +412,11 @@ static bool output(void *unused, unsigned distance, unsigned count, uint8_t lite
         return false;
     while (count--) {
         uint8_t b = literal;
-        if (distance) {
-            const uint32_t at = op - distance;
-            if (in_store_head(at))
-                b = store_head[at - fwlen];
-            else if (page_len && at >= page_start && at < page_start + page_len)
-                b = page[at - page_start];
-            else if (at >= fwlen && store_skipped(at - fwlen))
-                b = 0xFF;
-            else if (INS_Read(address(at), &b, 1))
-                return false;
-        }
-        if (in_store_head(op)) {
-            store_head[op - fwlen] = b;
-        } else {
-            if (!page_len)
-                page_start = op;
-            page[page_len++] = b;
-            /* A page ends at a physical 256-byte boundary or at a part end. */
-            if ((address(op) & 255u) == 255u || op + 1 == fwlen || op + 1 == total) {
-                if (!flush_page())
-                    return false;
-                install_update(5u + (op + 1u) * 90u / total);
-            }
-        }
-        op++;
+        if (distance && !filtered_at(op - distance, &b))
+            return false;
+        pend[op++ & 3u] = b;
+        if (!drain(false))
+            return false;
     }
     return true;
 }
@@ -398,11 +500,12 @@ __attribute__((noinline)) uint8_t INS_Run(void)
         return MB_ERR_SPI;
 
     progress(5, 0);
-    ip = op = page_len = 0;
+    ip = op = wp = page_len = cache_len = 0;
     memset(&decoder, 0, sizeof decoder);
     decoder.input = input;
     decoder.output = output;
-    if (!FP_Inflate(&decoder) || op != fwlen + storelen || ip != install_meta[META_PACKED_SIZE])
+    if (!FP_Inflate(&decoder) || !drain(true) || op != fwlen + storelen || wp != op ||
+        ip != install_meta[META_PACKED_SIZE])
         return MB_ERR_CRC;
 
     /* 4. Verify, then commit the store header and the slot header. */

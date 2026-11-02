@@ -63,6 +63,25 @@ def section(objcopy, elf, name, scratch):
     return scratch.read_bytes()
 
 
+def thumb_filter(data, to_absolute):
+    """Thumb BL filter (as xz's ARM-Thumb BCJ): BL offsets become absolute
+    targets, which compress better. A BL starts at an even position i with
+    data[i+1] = 0xF0..0xF7 and data[i+3] = 0xF8..0xFF; the filter keeps those
+    bits, so both sides find the same BLs, and two BLs never overlap. The
+    installer reverses it while inflating (sources/installer/App/main.c)."""
+    out = bytearray(data)
+    i = 0
+    while i + 4 <= len(out):
+        if out[i + 1] & 0xF8 == 0xF0 and out[i + 3] & 0xF8 == 0xF8:
+            v = (out[i + 1] & 7) << 19 | out[i] << 11 | (out[i + 3] & 7) << 8 | out[i + 2]
+            v = (v + ((i + 4) >> 1) if to_absolute else v - ((i + 4) >> 1)) & 0x3FFFFF
+            out[i:i + 4] = bytes((v >> 11 & 0xFF, 0xF0 | v >> 19, v & 0xFF, 0xF8 | (v >> 8 & 7)))
+            i += 4
+        else:
+            i += 2
+    return bytes(out)
+
+
 def pad4(data):
     return data + bytes(-len(data) % 4)
 
@@ -128,8 +147,8 @@ def main():
     store, placements, used_asset, used_bank = build_store(c, firmware, [resources] + modules)
 
     raw = firmware + store
-    compressed = zopfli.zlib.compress(raw, numiterations=15)[2:-4]
-    assert zlib.decompress(compressed, -15) == raw
+    compressed = zopfli.zlib.compress(thumb_filter(raw, True), numiterations=15)[2:-4]
+    assert thumb_filter(zlib.decompress(compressed, -15), False) == raw
     meta = [INSTALL_MAGIC, len(firmware), zlib.crc32(firmware), len(store), zlib.crc32(store),
             len(compressed), zlib.crc32(raw), zlib.crc32(compressed)]
     rows = ''.join(','.join(map(str, compressed[i:i + 32])) + ',\n'

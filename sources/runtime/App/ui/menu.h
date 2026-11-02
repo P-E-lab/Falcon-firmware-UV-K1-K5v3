@@ -112,6 +112,31 @@ static inline uint8_t MENU_PriorityIndex(uint8_t id)
 {
     return (uint8_t)(id - MENU_PRICH1);
 }
+// Menu categories (as F4HWN): ALL is the whole MenuList, the others a subset.
+enum {
+    MENU_CAT_ALL = 0,
+    MENU_CAT_CHANNELS,
+    MENU_CAT_SCAN,
+    MENU_CAT_KEYS,
+    MENU_CAT_POWER,
+    MENU_CAT_DISPLAY,
+    MENU_CAT_TIMERS,
+    MENU_CAT_AUDIO,
+    MENU_CAT_RADIO,
+    MENU_CAT_SERVICE,
+    MENU_CAT_COUNT
+};
+
+extern uint8_t gMenuCategory;  // category whose entries are listed
+extern bool gMenuCategories;   // the category screen is shown
+extern const char gMenuCatNames[MENU_CAT_COUNT][9];
+
+uint8_t UI_MENU_CategorySize(uint8_t cat);
+uint8_t UI_MENU_ItemIndex(uint8_t pos);
+void UI_MENU_ItemName(char *s, uint8_t pos);
+void UI_MENU_ShowCategories(bool show);
+void UI_MENU_Close(void);
+
 extern const uint8_t FIRST_HIDDEN_MENU_ITEM;
 extern const t_menu_item MenuList[];
 extern const char gSubMenu_LED[4][9];

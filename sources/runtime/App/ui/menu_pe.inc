@@ -5,10 +5,10 @@ static uint8_t first;
 #include "../font.h"
 #define MENU_DRAW __attribute__((section(".text.menu_draw"), noinline, noclone))
 static const char ns_menu_0[] = "%-+:=^!?_()*~";
-static const char ns_menu_1[] NATIVE_DATA(menu) = "MENU";
-static const char ns_menu_2[] NATIVE_DATA(menu) = "%02u/%02u";
-static const char ns_menu_3[] NATIVE_DATA(menu) = "%u.%02uV %u%%";
-static const char ns_menu_4[] NATIVE_DATA(menu) = "%u%%";
+static const char ns_menu_1[] = "MENU";
+static const char ns_menu_2[] = "%02u/%02u";
+static const char ns_menu_3[] = "%u.%02uV %u%%";
+static const char ns_menu_4[] = "%u%%";
 static const char ns_menu_5[] NATIVE_DATA(menu) = "%02u";
 static const char ns_menu_6[] NATIVE_DATA(menu) = "LIGHT";
 static const char ns_menu_7[] NATIVE_DATA(menu) = "LOCK KP";
@@ -22,6 +22,7 @@ static const char ns_menu_15[] NATIVE_DATA(menu) = "MHz";
 static const char ns_menu_16[] NATIVE_DATA(menu) = "--";
 static const char ns_menu_17[] NATIVE_DATA(menu) = "^";
 static const char ns_menu_18[] NATIVE_DATA(menu) = "SCAN";
+static const char ns_menu_19[] NATIVE_DATA(menu) = "%02u\nITEMS";
 
 static void MENU_DRAW MenuPixel(int x, int y, bool black)
 {
@@ -166,23 +167,28 @@ static void MENU_DRAW MenuCentered(const char *s, int start, int end, int y, boo
     MenuText(s, width < end - start ? (start + end - width) / 2 - first : start, y, end, black);
 }
 
-static NATIVE_CODE(menu) void MenuDrawHeaderNative(void)
+static void MENU_DRAW MenuDrawHeader(void)
 {
     char s[20];
     memset(gStatusLine, 0, sizeof(gStatusLine));
     MenuBox(0, 0, 128, 7, true);
-    MenuText(ns_menu_1, 2, 6, 28, false);
+    // MENU on the category screen, else the category name; the counter follows it.
+    const char *title = gMenuCategories ? ns_menu_1 : gMenuCatNames[gMenuCategory];
+    MenuText(title, 2, 6, 128, false);
     sprintf(s, ns_menu_2, 1 + gMenuCursor, gMenuListCount);
-    MenuText(s, 32, 6, 63, false);
+    const int x = 9 + MenuTextWidth(title);
+    MenuText(s, x, 6, 128, false);
+    const int end = x + MenuTextWidth(s);
     const unsigned percent = BATTERY_VoltsToPercent(gBatteryVoltageAverage);
     if (gSetting_battery_text == 1)
         UI_FormatVoltage(s, gBatteryVoltageAverage);
     else if (gSetting_battery_text == 3)
         sprintf(s, ns_menu_3, gBatteryVoltageAverage / 100, gBatteryVoltageAverage % 100, percent);
-    else if (gSetting_battery_text == 2)
-        sprintf(s, ns_menu_4, percent);
     else
         s[0] = 0;
+    // Voltage + percent that would touch the counter: the percent alone.
+    if (gSetting_battery_text == 2 || (gSetting_battery_text == 3 && 126 - MenuTextWidth(s) < end + 6))
+        sprintf(s, ns_menu_4, percent);
     MenuText(s, 126 - MenuTextWidth(s), 6, 128, false);
 }
 
@@ -450,7 +456,7 @@ static NATIVE_CODE(menu) void DisplayMenuNative(void)
     char s[64];
     const int m = UI_MENU_GetCurrentMenuId();
     UI_DisplayClear();
-    MenuDrawHeaderNative();
+    MenuDrawHeader();
     BACKLIGHT_TurnOn();
     // Keep the existing selected-setting preview effects, once per redraw.
     if (m == MENU_SCR) {
@@ -481,13 +487,15 @@ static NATIVE_CODE(menu) void DisplayMenuNative(void)
         first = gMenuCursor - 5;
     if (first + 6 > gMenuListCount)
         first = gMenuListCount > 6 ? gMenuListCount - 6 : 0;
+    // The category screen widens the name column for CHANNELS.
+    const int sep = gMenuCategories ? 67 : 60;
     for (unsigned row = 0; row < 6 && first + row < gMenuListCount; ++row) {
         const unsigned idx = first + row;
         const int y = 15 + 9 * row;
         const bool selected = idx == gMenuCursor;
         if (selected) {
             MenuBox(0, y - 6, 14, 7, true);
-            MenuBox(17, y - 6, 43, 7, true);
+            MenuBox(17, y - 6, sep - 17, 7, true);
             MenuPixel(13, y - 6, false);
             MenuPixel(13, y, false);
             MenuPixel(17, y - 6, false);
@@ -495,13 +503,15 @@ static NATIVE_CODE(menu) void DisplayMenuNative(void)
         }
         sprintf(s, ns_menu_5, idx + 1);
         MenuText(s, 1, y, 12, !selected);
-        FP_CopyString(s, MenuList[idx].name, sizeof MenuList[idx].name);
-        MenuText(s, 19, y, 60, !selected);
+        UI_MENU_ItemName(s, idx);
+        MenuText(s, 19, y, sep, !selected);
     }
     const int bottom = 15 + 9 * ((gMenuListCount - first < 6 ? gMenuListCount - first : 6) - 1);
-    MenuBox(60, 9, 1, bottom - 8, true);
+    MenuBox(sep, 9, 1, bottom - 8, true);
     const int valueY = (9 + bottom + 5) / 2;
     MenuOption(m, gSubMenuSelection, s);
+    if (gMenuCategories)
+        sprintf(s, ns_menu_19, UI_MENU_CategorySize(gMenuCursor));
     if (m == MENU_F1SHRT || m == MENU_F1LONG || m == MENU_F2SHRT || m == MENU_F2LONG || m == MENU_MLONG) {
         switch (gSubMenu_SIDEFUNCTIONS[gSubMenuSelection].id) {
             case ACTION_OPT_FLASHLIGHT:
@@ -519,13 +529,13 @@ static NATIVE_CODE(menu) void DisplayMenuNative(void)
     }
     const char *second = strchr(s, '\n');
     if (second) {
-        MenuCentered(s, 62, 127, valueY - 3, true);
-        MenuCentered(second + 1, 62, 127, valueY + 4, true);
+        MenuCentered(s, sep + 2, 127, valueY - 3, true);
+        MenuCentered(second + 1, sep + 2, 127, valueY + 4, true);
     } else
-        MenuCentered(s, 62, 127, valueY, true);
+        MenuCentered(s, sep + 2, 127, valueY, true);
     if (gIsInSubMenu || gAskForConfirmation) {
         char title[7];
-        FP_CopyString(title, MenuList[gMenuCursor].name, sizeof title);
+        FP_CopyString(title, MenuList[UI_MENU_ItemIndex(gMenuCursor)].name, sizeof title);
         MenuPopup(title);
         if (gAskForConfirmation) {
             MenuCentered(gAskForConfirmation == 1 ? ns_menu_10 : ns_menu_11, 39, 121, 36, true);
@@ -641,10 +651,7 @@ static NATIVE_CODE(menu) void DisplayMenuNative(void)
 
 void UI_MenuDrawHeader(void)
 {
-    if (APP_NativeBegin(NATIVE_MENU)) {
-        MenuDrawHeaderNative();
-        APP_NativeEnd();
-    }
+    MenuDrawHeader();
 }
 void UI_DisplayMenu(void)
 {

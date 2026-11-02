@@ -129,11 +129,133 @@ const t_menu_item MenuList[] FP_RESOURCE = {
     {"Reset", MENU_RESET},
     {"", 0xff}};
 
+const char gMenuCatNames[MENU_CAT_COUNT][9] = {
+    "ALL", "CHANNELS", "SCAN", "KEYS", "POWER", "DISPLAY", "TIMERS", "AUDIO", "RADIO", "SERVICE",
+};
+
+// Entries of CHANNELS .. SERVICE in display order, each category ended by 0xFF.
+static const uint8_t MenuCatIds[] = {
+    MENU_STEP, MENU_TXP, MENU_R_DCS, MENU_R_CTCS, MENU_T_DCS, MENU_T_CTCS, MENU_SFT_D, MENU_OFFSET, MENU_W_N,
+#ifdef ENABLE_FEAT_F4HWN_NARROWER
+    MENU_SET_NFM,
+#endif
+    MENU_SCR, MENU_COMPAND, MENU_AM, MENU_LIST_CH, MENU_MEM_CH, MENU_DEL_CH, MENU_MEM_NAME, 0xFF,
+    MENU_PRICH1, MENU_PRICH2, MENU_PRICH3, MENU_PRICH4, MENU_SQLSCN, MENU_SQLHYS, 0xFF,
+    MENU_F1SHRT, MENU_F1LONG, MENU_F2SHRT, MENU_F2LONG, MENU_MLONG, MENU_AUTOLK,
+#ifdef ENABLE_FEAT_F4HWN
+    MENU_SET_LCK, MENU_BTN_INV,
+#endif
+    0xFF,
+    MENU_SAVE,
+#ifdef ENABLE_FEAT_F4HWN
+    MENU_BAT_TXT,
+#endif
+    0xFF,
+    MENU_PONMSG, MENU_PONSCR, MENU_LED, MENU_ABR, MENU_ABR_MIN, MENU_ABR_MAX, MENU_ABR_ON_TX_RX,
+#ifdef ENABLE_FEAT_F4HWN
+    MENU_SET_CTR, MENU_SET_INV,
+#endif
+    MENU_METER_STYLE, 0xFF,
+    MENU_TOT,
+#ifdef ENABLE_FEAT_F4HWN_RX_TX_TIMER
+    MENU_SET_TMR,
+#endif
+    0xFF,
+    MENU_MIC, MENU_SET_MET,
+#ifdef ENABLE_FEAT_F4HWN_RX_TX_TIMER
+    MENU_SET_AUD, MENU_SET_RXG,
+#endif
+    MENU_SET_VOLUME, 0xFF,
+    MENU_SQL, MENU_STE, MENU_RP_STE, MENU_ROGER, MENU_AUTO_ROGER, MENU_TONE,
+#ifdef ENABLE_VOX
+    MENU_VOX,
+#endif
+    MENU_TDR, 0xFF,
+    MENU_F_LOCK,
+#ifdef ENABLE_F_CAL_MENU
+    MENU_F_CALI,
+#endif
+    MENU_BATCAL, MENU_BATTYP, MENU_RESET, 0xFF,
+};
+
+uint8_t gMenuCategory;
+bool gMenuCategories;
+static uint8_t menuCatCursor[MENU_CAT_COUNT]; // last entry shown in each category
+
+static const uint8_t *MenuCatList(uint8_t cat)
+{
+    const uint8_t *p = MenuCatIds;
+    while (--cat)
+        while (*p++ != 0xFF)
+            ;
+    return p;
+}
+
+uint8_t UI_MENU_CategorySize(uint8_t cat)
+{
+    uint8_t n = 0;
+    if (cat == MENU_CAT_ALL) {
+        while (n < 255 && FP_Byte(MenuList[n].name))
+            ++n;
+    } else {
+        for (const uint8_t *p = MenuCatList(cat); *p != 0xFF; ++p)
+            ++n;
+    }
+    return n;
+}
+
+// MenuList index of the entry at position 'pos' of the listed category.
+uint8_t UI_MENU_ItemIndex(uint8_t pos)
+{
+    if (gMenuCategory == MENU_CAT_ALL)
+        return pos;
+    const uint8_t id = MenuCatList(gMenuCategory)[pos];
+    uint8_t i = 0;
+    while (FP_Byte(&MenuList[i].menu_id) != id && FP_Byte(MenuList[i].name))
+        ++i;
+    return i;
+}
+
+// Row name at 'pos': a category on the category screen, else an entry.
+void UI_MENU_ItemName(char *s, uint8_t pos)
+{
+    if (gMenuCategories)
+        strcpy(s, gMenuCatNames[pos]);
+    else
+        FP_CopyString(s, MenuList[UI_MENU_ItemIndex(pos)].name, sizeof MenuList[0].name);
+}
+
+// true: list the categories; false: open the highlighted one. Each level
+// keeps its cursor, so MENU and EXIT return where the user left.
+void UI_MENU_ShowCategories(bool show)
+{
+    if (show == gMenuCategories)
+        return;
+    if (show) {
+        menuCatCursor[gMenuCategory] = gMenuCursor;
+        gMenuCursor = gMenuCategory;
+        gMenuListCount = MENU_CAT_COUNT;
+    } else {
+        gMenuCategory = gMenuCursor;
+        gMenuCursor = menuCatCursor[gMenuCategory];
+        gMenuListCount = UI_MENU_CategorySize(gMenuCategory);
+    }
+    gMenuCategories = show;
+}
+
+// Leaving the menu from the category screen: the next MENU reopens the last
+// category opened, on its last entry.
+void UI_MENU_Close(void)
+{
+    if (gMenuCategories) {
+        gMenuCursor = gMenuCategory;
+        UI_MENU_ShowCategories(false);
+    }
+}
+
 void UI_MENU_InitList(void)
 {
-    gMenuListCount = 0;
-    while (gMenuListCount < 255 && FP_Byte(MenuList[gMenuListCount].name))
-        ++gMenuListCount;
+    gMenuListCount = UI_MENU_CategorySize(MENU_CAT_ALL);
 }
 
 const uint8_t FIRST_HIDDEN_MENU_ITEM = MENU_F_LOCK;
@@ -251,6 +373,10 @@ bool gIsInSubMenu;
 uint8_t gMenuCursor;
 int UI_MENU_GetCurrentMenuId()
 {
+    if (gMenuCategories)
+        return 0xff; // no entry selected on the category screen
+    if (gMenuCategory != MENU_CAT_ALL)
+        return MenuCatList(gMenuCategory)[gMenuCursor];
     if (gMenuCursor < ARRAY_SIZE(MenuList))
         return FP_Byte(&MenuList[gMenuCursor].menu_id);
 

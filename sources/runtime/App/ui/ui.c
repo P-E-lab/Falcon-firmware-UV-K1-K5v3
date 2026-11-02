@@ -104,6 +104,8 @@ void GUI_SelectNextDisplay(GUI_DisplayType_t Display)
             SETTINGS_SaveVfoNow();
         if (gScreenToDisplay == DISPLAY_MENU && UI_MENU_GetCurrentMenuId() == MENU_SET_CTR)
             ST7565_SetContrast(gSetting_set_ctr);
+        if (gScreenToDisplay == DISPLAY_MENU)
+            UI_MENU_Close();
         gInputBoxIndex = 0;
         INPUTBOX_FrequencyBegin();
         gIsInSubMenu = false;

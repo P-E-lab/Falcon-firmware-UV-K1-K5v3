@@ -985,6 +985,12 @@ static NATIVE_CODE(menukeys) void MENU_Key_EXIT(bool bKeyPressed, bool bKeyHeld)
             return;
         }
 
+        if (!gMenuCategories) { // back to the category screen
+            UI_MENU_ShowCategories(true);
+            gInputBoxIndex = 0;
+            gRequestDisplayScreen = DISPLAY_MENU;
+            return;
+        }
 
         gRequestDisplayScreen = DISPLAY_MAIN;
 
@@ -1005,6 +1011,13 @@ static NATIVE_CODE(menukeys) void MENU_Key_MENU(const bool bKeyPressed, const bo
         return;
 
     gRequestDisplayScreen = DISPLAY_MENU;
+
+    if (gMenuCategories) { // open the highlighted category
+        UI_MENU_ShowCategories(false);
+        gInputBoxIndex = 0;
+        gFlagRefreshSetting = true;
+        return;
+    }
 
     if (!gIsInSubMenu) {
         const int m = UI_MENU_GetCurrentMenuId();
