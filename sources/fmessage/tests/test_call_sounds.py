@@ -49,7 +49,8 @@ static void load(const char *path) {
 static void nop(void) {}
 static void boolean(bool b) {(void)b;}
 static void af(uint8_t b) {(void)b;}
-static void regwrite(uint8_t r,uint16_t v) {(void)r;(void)v;}
+static uint16_t regs[256];
+static void regwrite(uint8_t r,uint16_t v) {regs[r]=v;}
 static void delay(uint32_t t) {(void)t;}
 '''
 melody=r'''
@@ -74,6 +75,9 @@ int main(int argc,char **argv) {
         tones=0;g.user[FMU_CALL]=i;melody();assert(tones==ix[1]);
     }
     assert(tx_begin==FMU_SOUNDS+1 && tx_done==tx_begin);
+    /* the exit sequence turns FSK and Tone2 off: left on, they silence the mic */
+    SEQ(SEQ_SETUP);SEQ(SEQ_RX);assert(regs[0x58]&1);
+    SEQ(SEQ_RESET);assert(regs[0x58]==0 && regs[0x70]==0 && regs[0x30]==0);
     return 0;
 }
 '''
@@ -112,4 +116,4 @@ with tempfile.TemporaryDirectory() as tmp:
         src.write_text('#include "'+str(ROOT/name/(name+'_app.c'))+'"\n'+common+body)
         subprocess.run(['gcc','-std=gnu11','-O0','-fno-builtin','-D_Static_assert(...)=',str(src),'-o',str(exe)],check=True)
         subprocess.run([str(exe),str(ROOT/name/(name+'_assets.bin'))],check=True)
-print('OK: 17 names/tones, selection wrap, save, old-version rejection, invalid-index fallback, app sizes and CRCs')
+print('OK: 17 names/tones, FSK off at exit, selection wrap, save, old-version rejection, invalid-index fallback, app sizes and CRCs')

@@ -3,12 +3,19 @@
 
   falcon_slots.py info  [--port P]                  read slot headers 0..4 (read only)
   falcon_slots.py write FILE.bin --slot N [--port P] erase, program and verify slot N (1..4)
+  falcon_slots.py apps  [--port P]                  list the installed apps (read only)
+  falcon_slots.py app-write FILE.app --slot N [--port P]  replace app slot N (0..63)
 
 Protocol: sources/runtime/App/app/uart.c (0x0514 hello, 0x0720..0x0727 slots)
 and driver/mb_flash.h (slot layout, 64-byte FMB1 header). The image is written
 first and the COMMITTED header last, so an interrupted write leaves an
 uncommitted slot that the radio refuses to restore. Slot 0 (backup) is
 refused by the radio and by this tool.
+
+Apps (0x0730..0x0737, apps/app_overlay.h) need the radio running Falcon, not
+the boot menu. A .app is the 64-byte header + code + assets: the code goes at
+slot+0x1000, the assets at slot+0x100 and the header last. Erasing keeps the
+app's own settings when the name matches (APP_SlotErase).
 """
 import argparse
 import glob
@@ -32,6 +39,13 @@ FLAG_COMMITTED = 1
 CHUNK = 128                        # command buffer is 256 bytes
 
 STATUS = ['OK', 'MAGIC', 'VERSION', 'NOT_COMMITTED', 'SIZE', 'CRC']
+
+APP_SLOT_COUNT = 64
+APP_MAGIC = b'FAP1'
+APP_CODE_OFFSET = 0x1000
+APP_ASSET_OFFSET = 0x100
+APP_STATUS = ['OK', 'SLOT', 'MAGIC', 'ABI', 'NOT_COMMITTED', 'SIZE', 'CRC', 'VMA', 'AUTH', 'CAP',
+              'ERR10', 'BUSY', 'SPI']
 
 
 def crc16(data):
@@ -102,6 +116,23 @@ class Radio:
         self.send(0x0724, bytes([slot, 0]) + struct.pack('<IHI', offset, len(data), self.timestamp) + data)
         return self.recv(0x0725)[5]
 
+    def app_info(self, slot):
+        self.send(0x0730, bytes([slot, 0]))
+        body = self.recv(0x0731)
+        return body[5], body[6:6 + 64]
+
+    def app_erase(self, slot):
+        self.send(0x0732, bytes([slot, 0]) + struct.pack('<I', self.timestamp))
+        return self.recv(0x0733, timeout=15)[5]
+
+    def app_write(self, slot, offset, data):
+        self.send(0x0734, bytes([slot, 0]) + struct.pack('<IHI', offset, len(data), self.timestamp) + data)
+        return self.recv(0x0735)[5]
+
+    def app_validate(self, slot):
+        self.send(0x0736, bytes([slot, 0]))
+        return self.recv(0x0737)[5]
+
 
 def status_name(s):
     return STATUS[s] if s < len(STATUS) else 'ERR%d' % s
@@ -158,9 +189,57 @@ def cmd_write(radio, slot, path, name, version):
         raise SystemExit('slot %d NOT valid' % slot)
 
 
+def app_status_name(s):
+    return APP_STATUS[s] if s < len(APP_STATUS) else 'ERR%d' % s
+
+
+def app_describe(hdr):
+    if hdr[:4] != APP_MAGIC:
+        return 'empty'
+    size, crc = struct.unpack_from('<II', hdr, 8)
+    name = hdr[20:36].split(b'\0')[0].decode('ascii', 'replace')
+    ver = hdr[36:52].split(b'\0')[0].decode('ascii', 'replace')
+    return '%-16s %-8s code %4d bytes  crc %08X' % (name, ver, size, crc)
+
+
+def cmd_apps(radio):
+    for slot in range(APP_SLOT_COUNT):
+        status, hdr = radio.app_info(slot)
+        if hdr[:4] == APP_MAGIC:
+            print('app %2d: %-13s %s' % (slot, app_status_name(status), app_describe(hdr)))
+
+
+def cmd_app_write(radio, slot, path):
+    if not 0 <= slot < APP_SLOT_COUNT:
+        raise SystemExit('app slot must be 0..63')
+    blob = open(path, 'rb').read()
+    if len(blob) < 64 or blob[:4] != APP_MAGIC:
+        raise SystemExit('%s is not a .app file' % path)
+    header = blob[:64]
+    code_size, = struct.unpack_from('<I', header, 8)
+    asset_size, = struct.unpack_from('<H', header, 60)
+    code, assets = blob[64:64 + code_size], blob[64 + code_size:]
+    if len(code) != code_size or len(assets) != asset_size:
+        raise SystemExit('%s: sizes do not match its header' % path)
+    print('old: %s' % app_describe(radio.app_info(slot)[1]))
+
+    status = radio.app_erase(slot)
+    if status:
+        raise SystemExit('erase failed: %s' % app_status_name(status))
+    for base, data in ((APP_ASSET_OFFSET, assets), (APP_CODE_OFFSET, code), (0, header)):
+        for off in range(0, len(data), CHUNK):
+            status = radio.app_write(slot, base + off, data[off:off + CHUNK])
+            if status:
+                raise SystemExit('write failed at 0x%X: %s' % (base + off, app_status_name(status)))
+    status = radio.app_validate(slot)
+    print('new: %s  validate: %s' % (app_describe(header), app_status_name(status)))
+    if status:
+        raise SystemExit('app slot %d NOT valid' % slot)
+
+
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument('action', choices=('info', 'write'))
+    p.add_argument('action', choices=('info', 'write', 'apps', 'app-write'))
     p.add_argument('file', nargs='?')
     p.add_argument('--port')
     p.add_argument('--slot', type=int)
@@ -172,6 +251,12 @@ def main():
     print('radio:', radio.hello())
     if a.action == 'info':
         cmd_info(radio)
+    elif a.action == 'apps':
+        cmd_apps(radio)
+    elif a.action == 'app-write':
+        if a.slot is None or not a.file:
+            p.error('app-write needs --slot and FILE')
+        cmd_app_write(radio, a.slot, a.file)
     else:
         if a.slot is None or not a.file:
             p.error('write needs --slot and FILE')

@@ -56,7 +56,9 @@ def seq(name, pairs):
     a.u16(name, [w for pair in pairs for w in pair])
 
 RESET = [(0x3F, 0x0000), (0x59, 0x0068), (SEQ_DELAY, 30), (0x30, 0x0000)]
-seq("SEQ_RESET", RESET)
+# On exit, also turn Tone2 and FSK off (as F4HWN after FSK): the resident
+# RADIO_SetupRegisters leaves REG_58 alone, and FSK left on silences the mic.
+seq("SEQ_RESET", RESET + [(0x70, 0x0000), (0x58, 0x0000)])
 seq("SEQ_SETUP", [
     (0x70, 0x00C3),             # Tone2 on, tuning gain 48
     (0x72, 0x3065),             # Tone2 baudrate 1200
