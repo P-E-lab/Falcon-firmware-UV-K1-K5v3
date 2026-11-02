@@ -1,0 +1,20 @@
+# Falcon source style (applied to project sources, not to vendor drivers).
+BasedOnStyle: LLVM
+IndentWidth: 4
+ContinuationIndentWidth: 4
+ColumnLimit: 110
+BreakBeforeBraces: Linux
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AllowShortBlocksOnASingleLine: Never
+AllowShortCaseLabelsOnASingleLine: false
+AlignConsecutiveMacros: Consecutive
+AlignTrailingComments: true
+IndentCaseLabels: true
+PointerAlignment: Right
+SortIncludes: Never
+ReflowComments: false
+SpaceAfterCStyleCast: false
+IndentPPDirectives: None
+MaxEmptyLinesToKeep: 2

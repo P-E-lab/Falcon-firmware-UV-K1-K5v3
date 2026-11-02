@@ -1,0 +1,40 @@
+FROM python:3.14-slim-bookworm
+
+# ---------------------------------------------
+# Base build tools
+# ---------------------------------------------
+RUN rm -f /etc/apt/sources.list.d/yarn.list && \
+    apt-get update && apt-get install -y --no-install-recommends \
+    build-essential cmake ninja-build python3 curl xz-utils ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+
+# ---------------------------------------------
+# Install ARM GNU Toolchain (host autodetect)
+# Works with or without TARGETARCH/BuildKit
+# ---------------------------------------------
+ARG ARM_GCC_VERSION=13.2.rel1
+ARG TARGETARCH  # may be unset under legacy builder
+
+RUN set -e; \
+    RELEASE="$(printf '%s' "${ARM_GCC_VERSION}" | tr '[:upper:]' '[:lower:]')"; \
+    # Derive base arch: prefer TARGETARCH if provided, fallback to uname -m
+    BASE_ARCH="${TARGETARCH:-}"; \
+    if [ -z "$BASE_ARCH" ]; then BASE_ARCH="$(uname -m)"; fi; \
+    case "$BASE_ARCH" in \
+      amd64|x86_64)  HOSTARCH="x86_64" ;; \
+      arm64|aarch64) HOSTARCH="aarch64" ;; \
+      *)             HOSTARCH="x86_64" ;; \
+    esac; \
+    TARBALL="arm-gnu-toolchain-${RELEASE}-${HOSTARCH}-arm-none-eabi.tar.xz"; \
+    URL="https://armkeil.blob.core.windows.net/developer/Files/downloads/gnu/${RELEASE}/binrel/${TARBALL}"; \
+    echo "Downloading ${URL}"; \
+    curl -fL -O "${URL}"; \
+    tar -xf "${TARBALL}"; \
+    rm "${TARBALL}"; \
+    DIR="$(ls -d arm-gnu-toolchain-*-arm-none-eabi)"; \
+    mv "${DIR}" /opt/toolchain
+
+RUN pip install --no-cache-dir zopfli==0.4.3
+
+ENV PATH="/opt/toolchain/bin:${PATH}"
+WORKDIR /src

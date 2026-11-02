@@ -1,0 +1,21 @@
+Falcon 4K
+
+Falcon is derived from Sonic firmware by Robby (Robby69400) and contributors,
+and incorporates work from Armel F4HWN, Dual Tachyon, egzumer and nToivola.
+The CHIRP driver derives from the work of Jacek Lipkowski, EGZUMER, JOC2,
+Dan Smith and F4HWN; see its copyright and GPL license notices.
+Third-party drivers and libraries retain their original notices.
+This is not an official release from the upstream Sonic or F4HWN projects.
+
+Overlay loader, selector and configuration-proxy API services
+are derived from Armel F4HWN v6.2.0, commit
+0ade03c0b1c94514566fadf7ce1c7a1f542a2283 (Apache-2.0).
+Falcon-specific modules use the same RAM workspace and retain BIN CRC binding.
+
+Overlay API level 3 services and the 40 official application packages and
+sources follow F4HWN v6.3.0, commit
+ca3a4271386049e7b459b215cef0ad0eea1a30ca (Apache-2.0).
+Falcon adapts wire-format step and power IDs to its own unchanged memory layout.
+
+The stack watermark (stack_usage.c) and the external asset-zone location
+follow F4HWN v7 (branch feature_update_v7, Apache-2.0).

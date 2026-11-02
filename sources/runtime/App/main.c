@@ -1,0 +1,259 @@
+/* Copyright 2023 Dual Tachyon
+ * https://github.com/DualTachyon
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *     Unless required by applicable law or agreed to in writing, software
+ *     distributed under the License is distributed on an "AS IS" BASIS,
+ *     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *     See the License for the specific language governing permissions and
+ *     limitations under the License.
+ */
+
+#include <stdint.h>
+#include <string.h>
+#include <stdio.h> // NULL
+#include "board.h"
+#include "store.h"
+#include "stack_usage.h"
+#include "misc.h"
+#include "radio.h"
+#include "settings.h"
+#include "version.h"
+
+#ifdef ENABLE_FEAT_F4HWN
+#ifdef ENABLE_FMRADIO
+#include "app/action.h"
+#include "ui/ui.h"
+#endif
+#ifdef ENABLE_SPECTRUM
+#include "app/spectrum.h"
+#endif
+#endif
+
+#include "app/app.h"
+
+
+#include "driver/backlight.h"
+#include "driver/bk4819.h"
+#include "driver/gpio.h"
+#include "driver/system.h"
+#include "driver/systick.h"
+#include "driver/py25q16.h"
+#ifdef ENABLE_FEAT_F4HWN_MULTIBOOT
+#include "driver/mb_flash.h"
+#include "ui/multiboot.h"
+#endif
+#ifdef ENABLE_UART
+#include "driver/uart.h"
+#endif
+
+#ifdef ENABLE_USB
+#include "py32f071_ll_bus.h"
+#include "driver/vcp.h"
+#endif
+
+#include "helper/battery.h"
+#include "helper/boot.h"
+
+#include "ui/lock.h"
+#include "ui/welcome.h"
+#ifdef ENABLE_FEAT_F4HWN_RXTX_LOG
+#include "app/rxtx_log.h"
+#endif
+#include "ui/menu.h"
+#include "ui/helper.h"
+#include "driver/st7565.h"
+
+#include "external/printf/printf.h"
+
+void _putchar(__attribute__((unused)) char c)
+{
+
+#ifdef ENABLE_UART
+    UART_Send((uint8_t *)&c, 1);
+#endif
+}
+
+static bool bootKeysHeld; // a key or PTT held at power-up
+
+static __attribute__((noinline)) void MainInit(void)
+{
+    SYSTICK_Init();
+    BOARD_Init();
+
+#ifdef ENABLE_FEAT_F4HWN_MULTIBOOT
+    /* Resolve the active settings bank BEFORE any EEPROM/settings access
+     * below. This also adopts a normally-flashed firmware as slot 0 (discreet
+     * self-backup) when the running image isn't the slot the marker points to.
+     * Calibration stays shared regardless of the selected bank. */
+    PY25Q16_SetBankBase(MB_BankBase(MB_BootResolveState()));
+#endif
+
+    /* The installer journal of this slot is obsolete once multiboot has
+     * recognized the installed image: clear its magic (bits 1 -> 0, no erase)
+     * so that a later install can never resume into this slot by mistake. */
+    if (MB_GetRunningSlot() < STORE_SLOTS) {
+        const uint32_t journal = STORE_Physical(MB_GetRunningSlot(), STORE_JOURNAL);
+        uint32_t magic;
+        PY25Q16_ReadPhysical(journal, &magic, sizeof magic);
+        if (magic == INSTALL_JOURNAL_MAGIC) {
+            static const uint32_t cleared = 0;
+            PY25Q16_WriteBuffer(journal, &cleared, sizeof cleared, false);
+        }
+    }
+    STORE_Check();
+    // Read the button IMMEDIATELY at startup, before lengthy initialization
+
+    boot_counter_10ms = 150;
+
+#ifdef ENABLE_UART
+    UART_Init();
+    UART_Send(UART_Version, strlen(UART_Version));
+#endif
+
+    BK4819_Init();
+
+    BOARD_ADC_GetBatteryInfo(&gBatteryCurrentVoltage, &gBatteryCurrent);
+
+    BOOT_Mode_t BootMode = BOOT_GetMode();
+#ifdef ENABLE_FEAT_F4HWN_MULTIBOOT
+    if (BootMode == BOOT_MODE_MULTIBOOT) {
+        gEeprom.BACKLIGHT_MAX = 10;
+        gEeprom.BACKLIGHT_TIME = 3;
+        BOOT_ProcessMode(BootMode);
+        BootMode = BOOT_MODE_NORMAL;
+    }
+#endif
+
+    SETTINGS_InitEEPROM();
+
+    SETTINGS_WriteBuildOptions();
+    SETTINGS_LoadCalibration();
+#ifdef ENABLE_FEAT_F4HWN_RXTX_LOG
+    RXTX_LOG_Init();
+#endif
+
+    RADIO_ConfigureChannel(0, VFO_CONFIGURE_RELOAD);
+    RADIO_ConfigureChannel(1, VFO_CONFIGURE_RELOAD);
+
+    RADIO_SelectVfos();
+
+    RADIO_SetupRegisters(true);
+
+    for (unsigned int i = 0; i < ARRAY_SIZE(gBatteryVoltages); i++)
+        BOARD_ADC_GetBatteryInfo(&gBatteryVoltages[i], &gBatteryCurrent);
+
+    BATTERY_GetReadings(false);
+
+    // Erase modes: process immediately, before any settings initialization
+    if (BootMode == BOOT_MODE_ERASE_NO_CALIB || BootMode == BOOT_MODE_ERASE) {
+        BOOT_ProcessMode(BootMode);
+        // If we returned (cancelled), continue normal boot
+        BootMode = BOOT_MODE_NORMAL;
+    }
+    // count the number of menu items
+    UI_MENU_InitList();
+    // wait for user to release all butts before moving on
+    if (GPIO_IsPttPressed() || KEYBOARD_Poll() != KEY_INVALID ||
+        BootMode != BOOT_MODE_NORMAL) { // keys are pressed
+        UI_DisplayReleaseKeys();
+        BACKLIGHT_TurnOn();
+        bootKeysHeld = true;
+
+        // 500ms
+        for (int i = 0; i < 50;) {
+            i = (!GPIO_IsPttPressed() && KEYBOARD_Poll() == KEY_INVALID) ? i + 1 : 0;
+            SYSTEM_DelayMs(10);
+        }
+        gKeyReading0 = KEY_INVALID;
+        gKeyReading1 = KEY_INVALID;
+        gDebounceCounter = 0;
+    }
+#ifdef ENABLE_USB
+    VCP_Init(); // USB always active
+#endif
+
+    if (!gChargingWithTypeC && gBatteryDisplayLevel == 0) {
+        FUNCTION_Select(FUNCTION_POWER_SAVE);
+
+        if (gEeprom.BACKLIGHT_TIME < 61) // backlight is not set to be always on
+            BACKLIGHT_TurnOff();         // turn the backlight OFF
+        else
+            BACKLIGHT_TurnOn(); // turn the backlight ON
+
+        gReducedService = true;
+    } else {
+        UI_DisplayWelcome();
+
+        BACKLIGHT_TurnOn();
+        if (gEeprom.POWER_ON_DISPLAY_MODE != POWER_ON_DISPLAY_MODE_NONE) { // 2.55 second boot-up screen
+            while (boot_counter_10ms > 0) {
+                if (KEYBOARD_Poll() != KEY_INVALID) { // halt boot beeps
+                    boot_counter_10ms = 0;
+                    break;
+                }
+            }
+            RADIO_SetupRegisters(true);
+        }
+
+
+        BOOT_ProcessMode(BootMode);
+
+        // GPIO_ClearBit(&GPIOA->DATA, GPIOA_PIN_VOICE_0);
+
+        gUpdateStatus = true;
+    }
+
+    /* Boot-only buffers are released before the foreground loop. */
+}
+
+// PONSCR: the chosen screen opens after power-up, as its own shortcut would.
+// A key held at power-up or a low battery keeps the normal VFO screen.
+static void RunPowerOnScreen(void)
+{
+    if (bootKeysHeld || gReducedService)
+        return;
+    switch (gEeprom.POWER_ON_SCREEN) {
+        case POWER_ON_SCREEN_SPECTRE_LIST:
+            APP_RunScanner(CHANNEL_MODE, false);
+            break;
+        case POWER_ON_SCREEN_SPECTRE_BAND:
+            APP_RunScanner(SCAN_BAND_MODE, false);
+            break;
+        case POWER_ON_SCREEN_SPECTRE_RANGE:
+            APP_RunScanner(SCAN_RANGE_MODE, false);
+            break;
+        case POWER_ON_SCREEN_SENTINEL:
+            APP_RunSentinel(); // its own last mode
+            break;
+#ifdef ENABLE_FMRADIO
+        case POWER_ON_SCREEN_FM:
+            ACTION_FM();
+            return;
+#endif
+        default:
+            return;
+    }
+    gRequestDisplayScreen = DISPLAY_MAIN;
+}
+
+void Main(void)
+{
+    STACK_WatermarkInit(); /* lowest stack use since boot, for SystemInfo */
+    MainInit();
+    RunPowerOnScreen();
+    while (true) {
+        if (gNextTimeslice) {
+            APP_Update();
+            APP_TimeSlice10ms();
+            if (gNextTimeslice_500ms) {
+                APP_TimeSlice500ms();
+            }
+        }
+    }
+}

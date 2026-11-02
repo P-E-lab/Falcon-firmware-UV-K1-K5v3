@@ -1,0 +1,495 @@
+/* Copyright 2023 Dual Tachyon
+ * https://github.com/DualTachyon
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *     Unless required by applicable law or agreed to in writing, software
+ *     distributed under the License is distributed on an "AS IS" BASIS,
+ *     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *     See the License for the specific language governing permissions and
+ *     limitations under the License.
+ */
+
+#include <string.h>
+
+#include "misc.h"
+#include "settings.h"
+#include "driver/py25q16.h"
+
+const uint8_t fm_radio_countdown_500ms = 2000 / 500;      // 2 seconds
+const uint16_t fm_play_countdown_scan_10ms = 100 / 10;    // 100ms
+const uint16_t fm_play_countdown_noscan_10ms = 1200 / 10; // 1.2 seconds
+const uint16_t fm_restore_countdown_10ms = 1000 / 10;     // 1 seconds
+
+const uint8_t vfo_state_resume_countdown_500ms = 1250 / 500; // 1.25 seconds (halved)
+
+const uint8_t menu_timeout_500ms = 20000 / 500;        // 20 seconds
+const uint16_t menu_timeout_long_500ms = 120000 / 500; // 2 minutes
+
+const uint8_t key_input_timeout_500ms = 8000 / 500; // 8 seconds
+
+const uint16_t key_repeat_delay_10ms = 400 / 10; // 400ms
+const uint16_t key_repeat_10ms = 80 / 10;        // 80ms .. MUST be less than 'key_repeat_delay'
+const uint16_t key_debounce_10ms = 20 / 10;      // 20ms
+
+const uint8_t scan_delay_10ms = 210 / 10; // 210ms
+
+const uint16_t battery_save_count_10ms = 10000 / 10; // 10 seconds
+
+const uint16_t power_save1_10ms = 100 / 10; // 100ms
+#ifdef ENABLE_VOX
+const uint16_t power_save2_10ms = 200 / 10;                // 200ms
+const uint16_t vox_stop_count_down_10ms = 1000 / 10;       // 1 second
+const uint16_t dual_watch_count_after_vox_10ms = 200 / 10; // 200ms
+#endif
+
+const uint8_t gMicGain_dB2[9] = {3, 8, 16, 24, 32, 40, 48, 56, 63}; // BK4819 {3, 8, 16, 24, 31};
+uint8_t gSetting_F_LOCK;
+
+enum BacklightOnRxTx_t gSetting_backlight_on_tx_rx;
+
+#ifdef ENABLE_FEAT_F4HWN
+uint8_t gSetting_set_pwr = 1;
+bool gDeleteChannelPending = false; // F+2 in MR mode: waiting M to confirm
+bool gSetting_set_ptt = 0;
+uint8_t gSetting_set_tot = 0;
+uint8_t gSetting_set_ctr = 15;
+bool gSetting_set_inv = false;
+bool gSetting_nav_invert = false;
+uint8_t gSetting_set_eot = 0;
+bool gSetting_set_lck = false;
+bool gSetting_set_met = 0;
+bool gSetting_set_gui = 0;
+uint8_t gSetting_set_audio_fm = 0;
+uint8_t gSetting_set_audio_am = 1;
+#ifdef ENABLE_FEAT_F4HWN_NARROWER
+bool gSetting_set_nfm = 0;
+bool gSetting_set_rxg = true;
+#endif
+bool gSetting_set_tmr = 0;
+bool gSetting_set_ptt_session;
+#ifdef ENABLE_FEAT_F4HWN_DEBUG
+int16_t gDebug;
+#endif
+int8_t dBmCorrTable[7] = {-15, -16, -10, -4, -7, -6, -1}; // Falcon band correction defaults
+#endif
+
+#ifdef ENABLE_AUDIO_BAR
+bool gSetting_mic_bar;
+#endif
+uint8_t gSetting_battery_text;
+uint8_t gSetting_led_mode = 0;
+
+bool gMonitor = false; // true opens the squelch
+
+uint32_t gCustomAesKey[4];
+bool bHasCustomAesKey;
+uint32_t gChallenge[4];
+
+uint16_t gEEPROM_RSSI_CALIB[7][4];
+
+uint16_t gEEPROM_1F8A;
+uint16_t gEEPROM_1F8C;
+
+//
+// Cache-Based Architecture: channel attributes moved to Flash
+// Cache holds only active channels in RAM (instead of all!)
+//
+
+MR_ChannelCache_t gMR_ChannelAttributes_Cache[MR_CHANNELS_CACHE_SIZE] = {0};
+ChannelAttributes_t gMR_ChannelAttributes_Current = {0};
+
+volatile uint16_t gBatterySaveCountdown_10ms = battery_save_count_10ms;
+
+volatile bool gPowerSaveCountdownExpired;
+volatile bool gSchedulePowerSave;
+volatile uint16_t gDualVfoCountdown_10ms = 10; // 100 ms initial Dual-Watch cadence
+volatile bool gDualVfoSchedule;
+
+volatile uint8_t gSerialConfigCountDown_500ms;
+volatile uint32_t gGlobalSysTickCounter;
+volatile bool gNextTimeslice_500ms;
+volatile bool gNextTimeslice_Monitor;
+volatile bool gNextTimeslice_10ms;
+volatile bool gNextTimeslice_listening;
+volatile bool gNextTimeslice_AutoPtt;
+volatile uint16_t gAutoPtt_Time;
+volatile uint32_t gAutoPttCountdown;
+volatile bool gNextTimeslice_display;
+volatile bool gNextTimeslice_SCAN_LED;
+volatile bool gNextTimeslice_SCAN_LED_OFF;
+volatile bool gNextTimeslice_history;
+volatile bool gNextTimeslice_HTimeS;
+
+volatile uint16_t gTxTimerCountdown_500ms;
+volatile bool gTxTimeoutReached;
+
+#ifdef ENABLE_FEAT_F4HWN
+volatile uint16_t gTxTimerCountdownAlert_500ms;
+volatile bool gTxTimeoutReachedAlert;
+volatile uint16_t gTxTimeoutToneAlert = 800;
+#ifdef ENABLE_FEAT_F4HWN_RX_TX_TIMER
+volatile uint16_t gRxTimerCountdown_500ms;
+#endif
+#endif
+
+volatile uint16_t gTailNoteEliminationCountdown_10ms;
+
+volatile uint8_t gVFOStateResumeCountdown_500ms;
+
+
+bool gEnableSpeaker;
+uint8_t gKeyInputCountdown = 0;
+uint16_t gKeyLockCountdown;
+uint8_t gRTTECountdown_10ms;
+bool bIsInLockScreen;
+uint8_t gUpdateStatus;
+uint8_t gFoundCTCSS;
+uint8_t gFoundCDCSS;
+bool gEndOfRxDetectedMaybe;
+
+int16_t gVFO_RSSI[2];
+uint8_t gVFO_RSSI_bar_level[2];
+
+uint8_t gReducedService;
+uint8_t gBatteryVoltageIndex;
+bool gCssBackgroundScan;
+
+uint16_t gMenuCountdown;
+bool gPttWasReleased;
+bool gPttWasPressed;
+bool gHasVfoBackup;
+uint8_t gKeypadLocked;
+bool gFlagReconfigureVfos;
+uint8_t gVfoConfigureMode;
+bool gFlagResetVfos;
+bool gRequestSaveVFO;
+uint16_t gRequestSaveChannel;
+bool gRequestSaveSettings;
+#ifdef ENABLE_FMRADIO
+bool gRequestSaveFM;
+#endif
+bool gFlagPrepareTX;
+
+bool gFlagAcceptSetting;
+bool gFlagRefreshSetting;
+
+#ifdef ENABLE_FMRADIO
+bool gFlagSaveFM;
+#endif
+bool g_CDCSS_Lost;
+uint8_t gCDCSSCodeType;
+bool g_CTCSS_Lost;
+bool g_CxCSS_TAIL_Found;
+bool g_SquelchLost;
+
+volatile uint16_t gFlashLightBlinkCounter;
+
+bool gFlagEndTransmission;
+uint16_t gNextMrChannel;
+ReceptionMode_t gRxReceptionMode;
+
+bool gRxVfoIsActive;
+bool gKeyBeingHeld;
+bool gPttIsPressed;
+bool gTx1750Active;
+#ifdef ENABLE_VOX
+bool g_VOX_Lost;
+bool gVOX_NoiseDetected;
+uint16_t gVoxResumeCountdown;
+uint16_t gVoxPauseCountdown;
+volatile uint16_t gVoxStopCountdown_10ms;
+#endif
+uint8_t gPttDebounceCounter;
+uint8_t gMenuListCount;
+uint8_t gScanDelay_10ms;
+bool gUpdateDisplay;
+
+bool gF_LOCK = false;
+
+volatile bool gNextTimeslice;
+volatile uint8_t gFoundCDCSSCountdown_10ms;
+volatile uint8_t gFoundCTCSSCountdown_10ms;
+volatile bool gNextTimeslice40ms;
+volatile bool gFlagTailNoteEliminationComplete;
+#ifdef ENABLE_FMRADIO
+#endif
+
+volatile uint8_t boot_counter_10ms;
+
+uint8_t gIsLocked = 0xFF;
+
+
+#ifdef ENABLE_FEAT_F4HWN
+bool gK5startup = true;
+bool gBackLight = false;
+uint8_t gBacklightTimeOriginal;
+uint8_t gBacklightBrightnessOld;
+uint8_t gSquelchLevelOriginal = 10;
+uint8_t gPttOnePushCounter = 0;
+uint32_t gBlinkCounter = 0;
+volatile uint16_t gVfoSaveCountdown_10ms = 0;
+volatile bool gScheduleVfoSave = false;
+bool gVfoStateChanged = false;
+char gListName[MR_CHANNELS_LIST][7];
+#endif
+
+inline void FUNCTION_NOP()
+{
+    ;
+}
+
+
+int32_t NUMBER_AddWithWraparound(int32_t Base, int32_t Add, int32_t LowerLimit, int32_t UpperLimit)
+{
+    Base += Add;
+
+    if (Base == 0x7fffffff || Base < LowerLimit)
+        return UpperLimit;
+
+    if (Base > UpperLimit)
+        return LowerLimit;
+
+    return Base;
+}
+
+//
+// Cache-Based Channel Attributes Implementation
+//
+//
+// This replaces the huge array (~ 2,000 bytes in RAM) with a smart cache system
+// that keeps only active channels in RAM and loads others from Flash on demand.
+//
+// SRAM Savings: ~ 2,000 bytes (84% reduction!)
+//
+
+// Flash address where channel attributes start
+// NOTE: Verify this matches your Flash layout!
+
+// Each channel takes 2 bytes (ChannelAttributes_t is uint16_t)
+#define FLASH_CHANNEL_ATTR_SIZE 2
+
+// Cache hit/miss statistics (optional, for debugging)
+
+#ifdef ENABLE_FEAT_F4HWN_DEBUG
+static uint32_t cache_hits = 0;
+static uint32_t cache_misses = 0;
+#endif
+
+//
+// Internal Helper Functions
+//
+
+// Find cache entry for given channel
+// Returns index if found, -1 if not found
+
+static int MR_FindInCache(uint16_t channel_id)
+{
+    for (int i = 0; i < MR_CHANNELS_CACHE_SIZE; i++) {
+        if (gMR_ChannelAttributes_Cache[i].channel_id == channel_id) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+// Find oldest entry in cache (for eviction - LRU)
+
+
+// Find empty cache slot
+// Returns index if found, -1 if cache is full
+
+
+static int MR_AllocateCacheSlot(void)
+{
+    int oldest = 0;
+    for (int i = 0; i < MR_CHANNELS_CACHE_SIZE; ++i) {
+        if (gMR_ChannelAttributes_Cache[i].channel_id == UINT16_MAX)
+            return i;
+        if (gMR_ChannelAttributes_Cache[i].access_time < gMR_ChannelAttributes_Cache[oldest].access_time)
+            oldest = i;
+    }
+    return oldest;
+}
+// Get current time (for LRU eviction)
+static uint32_t GetCurrentTime(void)
+{
+    // Using gBlinkCounter which increments continuously
+    extern uint32_t gBlinkCounter;
+    return gBlinkCounter;
+}
+
+//
+// Public API Functions
+// ════════════════════════════════════════════════════════════════════════════
+
+/* Seven VFO attributes follow the fourteen VFO records in this config bank.
+ * Keep frequently updated VFO state away from migration metadata. */
+static uint32_t MR_ChannelAttributeAddress(uint16_t channel_id)
+{
+#if defined(ENABLE_4096)
+    if (channel_id >= MR_CHANNELS_MAX)
+        return 0x90E0u + (channel_id - MR_CHANNELS_MAX) * sizeof(ChannelAttributes_t);
+#endif
+    return ADRESS_CHANNELS_ATTRIBUTES + channel_id * sizeof(ChannelAttributes_t);
+}
+
+// Load channel attributes from Flash
+void MR_LoadChannelAttributesFromFlash(uint16_t channel_id, ChannelAttributes_t *attributes)
+{
+    // CRITICAL: Validate channel_id
+    if (channel_id >= (MR_CHANNELS_MAX + 7)) {
+        attributes->__val = 0;
+        return;
+    }
+
+    // Calculate Flash address
+    uint32_t flash_addr = MR_ChannelAttributeAddress(channel_id);
+
+    // Read 2 bytes from Flash
+    PY25Q16_ReadBuffer(flash_addr, attributes, sizeof(ChannelAttributes_t));
+}
+
+// Save channel attributes to Flash
+void MR_SaveChannelAttributesToFlash(uint16_t channel_id, const ChannelAttributes_t *attributes)
+{
+    // CRITICAL: Validate channel_id
+    if (channel_id >= (MR_CHANNELS_MAX + 7)) {
+        return;
+    }
+
+    // Calculate Flash address
+    uint32_t flash_addr = MR_ChannelAttributeAddress(channel_id);
+
+    // Write 2 bytes to Flash
+    PY25Q16_WriteBuffer(flash_addr, attributes, sizeof(ChannelAttributes_t), false);
+}
+
+// Get channel attributes (from cache or Flash)
+// This is the main function used by the rest of the code
+ChannelAttributes_t *MR_GetChannelAttributes(uint16_t channel_id)
+{
+    // Input validation
+    if (channel_id >= (MR_CHANNELS_MAX + 7)) {
+        return NULL;
+    }
+
+    // Check cache first (FAST PATH)
+    int cache_index = MR_FindInCache(channel_id);
+
+    if (cache_index >= 0) {
+// CACHE HIT
+#ifdef ENABLE_FEAT_F4HWN_DEBUG
+        cache_hits++;
+#endif
+
+        // Update access time for LRU
+        gMR_ChannelAttributes_Cache[cache_index].access_time = GetCurrentTime();
+
+        return &gMR_ChannelAttributes_Cache[cache_index].attributes;
+    }
+
+// CACHE MISS - Load from Flash
+#ifdef ENABLE_FEAT_F4HWN_DEBUG
+    cache_misses++;
+#endif
+
+    // Find slot for new entry
+    int slot = MR_AllocateCacheSlot();
+
+    // Load from Flash into cache slot
+    MR_LoadChannelAttributesFromFlash(channel_id, &gMR_ChannelAttributes_Cache[slot].attributes);
+
+    // Store channel_id in cache
+    gMR_ChannelAttributes_Cache[slot].channel_id = channel_id;
+
+    // Set access time
+    gMR_ChannelAttributes_Cache[slot].access_time = GetCurrentTime();
+
+    return &gMR_ChannelAttributes_Cache[slot].attributes;
+}
+
+// Set channel attributes (updates both cache and Flash)
+void MR_SetChannelAttributes(uint16_t channel_id, const ChannelAttributes_t *attributes)
+{
+    if (channel_id >= MR_CHANNELS_MAX + 7 || !attributes)
+        return;
+    ChannelAttributes_t flash_version;
+    MR_LoadChannelAttributesFromFlash(channel_id, &flash_version);
+    const bool changed = memcmp(&flash_version, attributes, sizeof flash_version) != 0;
+    if (changed)
+        MR_SaveChannelAttributesToFlash(channel_id, attributes);
+    int slot = MR_FindInCache(channel_id);
+    if (slot < 0) {
+        if (!changed)
+            return;
+        slot = MR_AllocateCacheSlot();
+        gMR_ChannelAttributes_Cache[slot].channel_id = channel_id;
+    }
+    gMR_ChannelAttributes_Cache[slot].attributes = *attributes;
+    gMR_ChannelAttributes_Cache[slot].access_time = GetCurrentTime();
+}
+
+// Invalidate entire cache (call after loading Flash backup)
+void MR_InvalidateChannelAttributesCache(void)
+{
+    for (int i = 0; i < MR_CHANNELS_CACHE_SIZE; i++) {
+        gMR_ChannelAttributes_Cache[i].channel_id = 0xFFFF; // Mark as empty
+        gMR_ChannelAttributes_Cache[i].access_time = 0;
+    }
+}
+
+// Initialize cache (call from settings.c boot sequence)
+void MR_InitChannelAttributesCache(void)
+{
+    // Clear cache
+    MR_InvalidateChannelAttributesCache();
+
+    // Pre-load commonly used channels (VFO A, VFO B, channel 0)
+    // This speeds up first access
+    uint16_t channels_to_preload[] = {0, 1, 2};
+
+    for (int i = 0; i < ARRAY_SIZE(channels_to_preload); i++) {
+        if (channels_to_preload[i] < (MR_CHANNELS_MAX + 7)) {
+            MR_GetChannelAttributes(channels_to_preload[i]);
+        }
+    }
+}
+
+//
+// Debugging / Statistics (optional, for development)
+//
+
+#ifdef ENABLE_FEAT_F4HWN_DEBUG
+
+uint32_t MR_GetCacheHits(void)
+{
+    return cache_hits;
+}
+
+uint32_t MR_GetCacheMisses(void)
+{
+    return cache_misses;
+}
+
+float MR_GetCacheHitRate(void)
+{
+    uint32_t total = cache_hits + cache_misses;
+    if (total == 0)
+        return 0.0f;
+    return (float)cache_hits / (float)total * 100.0f;
+}
+
+void MR_PrintCacheStats(void)
+{
+    // This would print cache statistics (requires UART_Printf)
+    // Uncomment if you want debug output:
+    // UART_Printf("Cache Stats: Hits=%u Misses=%u Rate=%.1f%%\n",
+    //    cache_hits, cache_misses, MR_GetCacheHitRate());
+}
+
+#endif
