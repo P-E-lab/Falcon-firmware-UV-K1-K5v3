@@ -255,8 +255,8 @@ static void SendVersion(uint32_t Port)
     /* UVStudio chooses 16/48/64 app slots from the first numeric version,
      * not a capability query. Announce the 64-slot, API-3 app protocol here;
      * Version, boot display, module metadata and EEPROM retain Falcon identity. */
-    _Static_assert(sizeof("FALCON 7.0/3.0") <= sizeof(Reply.Data.Version), "device identity");
-    strcpy(Reply.Data.Version, "FALCON 7.0/3.0");
+    _Static_assert(sizeof("FALCON 7.0/3.1") <= sizeof(Reply.Data.Version), "device identity");
+    strcpy(Reply.Data.Version, "FALCON 7.0/3.1");
     Reply.Data.bHasCustomAesKey = bHasCustomAesKey;
     Reply.Data.bIsInLockScreen = bIsInLockScreen;
     Reply.Data.Challenge[0] = gChallenge[0];

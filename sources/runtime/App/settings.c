@@ -257,6 +257,13 @@ void SETTINGS_InitEEPROM(void)
 
     // 0EA8..0EAF
     PY25Q16_ReadBuffer(0x00A0A8 + 0x18, Data, 8);
+    // Falcon 3.1.0 turns SetRxG ON once on update, as F4HWN v7; Data[7]
+    // (unused by Falcon and F4HWN) marks it done.
+    if (Data[7] != 0x31) {
+        Data[0] = 1;
+        Data[7] = 0x31;
+        PY25Q16_WriteBuffer(0x00A0C0, Data, 8, false);
+    }
     gSetting_set_rxg = (Data[0] < 2) ? Data[0] : true; // SetRxG, as F4HWN v7
     gEeprom.ROGER = gRogerModes[SETTINGS_RogerIndex(Data[1])];
     APP_SetAutoRoger(Data[5] <= 6 ? Data[5] : 0);

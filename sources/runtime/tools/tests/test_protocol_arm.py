@@ -23,7 +23,7 @@ summary=[]
 for port in [0,1]:
  reply,data=request(port,0x0514,struct.pack('<I',0x12345678))
  assert reply==0x0515
- name=data[:16].split(b'\0')[0].decode();assert name=='FALCON 7.0/3.0',name
+ name=data[:16].split(b'\0')[0].decode();assert name=='FALCON 7.0/3.1',name
  assert u.mem_read(addr('gSerialConfigCountDown_500ms'),1)==b'\x0c'
  for slot in range(64):
   reply,data=request(port,0x0730,bytes([slot]))

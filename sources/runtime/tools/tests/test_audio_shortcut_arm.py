@@ -62,6 +62,10 @@ for n in ['BK4819_SetCompander', 'RADIO_SetupRegisters', 'BACKLIGHT_SetBrightnes
     if n in sym or any(k.startswith(n + '.') for k in sym):
         stub(n, lambda *a: ret())
 flash[0x00A160:0x00A170] = b'2.3.1.D1'.ljust(16, b'\0')  # Falcon settings already initialized
+flash[0x00A0C7] = 0xFF  # update from 3.0.0: SetRxG OFF is turned ON once
+flash[0x00A0C0] = 0
+call('SETTINGS_InitEEPROM', count=200000000)
+assert u.mem_read(rxg, 1)[0] == 1 and flash[0x00A0C0] == 1 and flash[0x00A0C7] == 0x31
 for stored, expect in [(0, 0), (1, 1), (0xFF, 1)]:
     flash[0x00A0C0] = stored
     call('SETTINGS_InitEEPROM', count=200000000)
@@ -72,7 +76,7 @@ assert flash[0x00A0C0] == 0
 put8(rxg, 1)
 call('SETTINGS_SaveSettings', count=200000000)
 assert flash[0x00A0C0] == 1
-print('PASS SetRxG read from and saved to 0x00A0C0 (0 OFF, 1 ON, anything else ON)', flush=True)
+print('PASS SetRxG read from and saved to 0x00A0C0 (0 OFF, 1 ON, anything else ON); turned ON once on update to 3.1.0', flush=True)
 
 # FMESSAGE: the app holding shortcut ID 15 is launched; without it, a double beep.
 launched, tones = [], []
@@ -83,7 +87,7 @@ for n in ['BK4819_PlayToneRaw', 'BK4819_PrepareToPlayTone', 'RADIO_SetupRegister
 call('APP_NotifySlotChanged')
 call('ACTION_FMessage', count=200000000)
 assert not launched and tones.count('BK4819_PlayToneRaw') == 2, (launched, tones)
-install(Path('/tmp/claude-0/proto/fmessage/FMessage.app'), 3)
+install(Path(__file__).resolve().parents[3] / 'fmessage/fmessage/FMessage.app', 3)
 call('APP_NotifySlotChanged')
 tones.clear()
 call('ACTION_FMessage', count=200000000)

@@ -12,7 +12,7 @@
 # See GPL-2.0.txt or <https://www.gnu.org/licenses/> for the full license.
 
 # Falcon CHIRP driver — navigation support added in 2.0.1-OA.
-# Load this file as a CHIRP custom module, then select Quansheng / UV-K1 / UV-K5 V3 Falcon v3.0.0.
+# Load this file as a CHIRP custom module, then select Quansheng / UV-K1 / UV-K5 V3 Falcon v3.1.0.
 # Download a fresh image from the target radio before making edits.
 # Battery options follow the downloaded firmware version; EEPROM IDs stay stable.
 # Memories 4067..4096 are bands: Frequency = FSTART, Band stop (MHz) = FSTOP.
@@ -45,7 +45,7 @@ DEBUG_SHOW_OBFUSCATED_COMMANDS = False
 # might be useful for someone debugging some obscure memory issue
 DEBUG_SHOW_MEMORY_ACTIONS = False
 
-DRIVER_VERSION = "Falcon driver: 2026/10/25 v3.0.0"
+DRIVER_VERSION = "Falcon driver: 2026/11/04 v3.1.0"
 
 VALEUR_COMPILER = "ENABLE"
 
@@ -789,7 +789,9 @@ def _sayhello(serport):
                                 "restart radio into normal mode")
     firmware = _getstring(rep, 4, 24)
     # The v7 prefix selects 64 Apps in UVStudio; present the Falcon release here.
-    if firmware == "FALCON 7.0/3.0":
+    if firmware == "FALCON 7.0/3.1":
+        firmware = "FALCON 3.1.0"
+    elif firmware == "FALCON 7.0/3.0":
         firmware = "FALCON 3.0.0"
     elif firmware in ("FALCON 6.3/2.3", "FALCON 6.2/2.2"):
         marker = _readmem(serport, 0xA160, 16).split(b"\0", 1)[0]
@@ -1011,7 +1013,7 @@ def list_def(value, lst, default):
 class UVK5RadioEgzumer(chirp_common.CloneModeRadio):
     """Quansheng UV-K1 running Falcon firmware."""
     VENDOR = "Quansheng"
-    MODEL = "UV-K1 / UV-K5 V3 Falcon v3.0.0"
+    MODEL = "UV-K1 / UV-K5 V3 Falcon v3.1.0"
     BAUD_RATE = 38400
     NEEDS_COMPAT_SERIAL = False
     FIRMWARE_VERSION = ""
@@ -1040,7 +1042,7 @@ class UVK5RadioEgzumer(chirp_common.CloneModeRadio):
         return self.FIRMWARE_VERSION
 
     def _supports_navigation(self):
-        return any(v in self._version_string() for v in ("2.0.1", "2.2.0", "2.2.1", "2.3.0", "2.3.1", "3.0.0", "1.2.1-SE", "1.3.0"))
+        return any(v in self._version_string() for v in ("2.0.1", "2.2.0", "2.2.1", "2.3.0", "2.3.1", "3.0.0", "3.1.0", "1.2.1-SE", "1.3.0"))
 
     def _is_legacy_battery(self):
         return "1.1.6" in self._version_string()
@@ -1880,7 +1882,7 @@ class UVK5RadioEgzumer(chirp_common.CloneModeRadio):
     def get_settings(self):
         _mem = self._memobj
 
-        ValFirm = "Firmware : Falcon v3.0.0"
+        ValFirm = "Firmware : Falcon v3.1.0"
 
   
         radio_firmware = RadioSettingGroup("radio_firmwarebasic", ValFirm)
