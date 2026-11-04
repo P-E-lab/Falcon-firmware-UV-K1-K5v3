@@ -5,6 +5,7 @@
   falcon_slots.py write FILE.bin --slot N [--port P] erase, program and verify slot N (1..4)
   falcon_slots.py apps  [--port P]                  list the installed apps (read only)
   falcon_slots.py app-write FILE.app --slot N [--port P]  replace app slot N (0..63)
+  falcon_slots.py app-erase --slot N [--port P]            remove the app of slot N (0..63)
 
 Protocol: sources/runtime/App/app/uart.c (0x0514 hello, 0x0720..0x0727 slots)
 and driver/mb_flash.h (slot layout, 64-byte FMB1 header). The image is written
@@ -237,9 +238,19 @@ def cmd_app_write(radio, slot, path):
         raise SystemExit('app slot %d NOT valid' % slot)
 
 
+def cmd_app_erase(radio, slot):
+    if not 0 <= slot < APP_SLOT_COUNT:
+        raise SystemExit('app slot must be 0..63')
+    print('old: %s' % app_describe(radio.app_info(slot)[1]))
+    status = radio.app_erase(slot)
+    if status:
+        raise SystemExit('erase failed: %s' % app_status_name(status))
+    print('app slot %d erased' % slot)
+
+
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument('action', choices=('info', 'write', 'apps', 'app-write'))
+    p.add_argument('action', choices=('info', 'write', 'apps', 'app-write', 'app-erase'))
     p.add_argument('file', nargs='?')
     p.add_argument('--port')
     p.add_argument('--slot', type=int)
@@ -257,6 +268,10 @@ def main():
         if a.slot is None or not a.file:
             p.error('app-write needs --slot and FILE')
         cmd_app_write(radio, a.slot, a.file)
+    elif a.action == 'app-erase':
+        if a.slot is None:
+            p.error('app-erase needs --slot')
+        cmd_app_erase(radio, a.slot)
     else:
         if a.slot is None or not a.file:
             p.error('write needs --slot and FILE')
