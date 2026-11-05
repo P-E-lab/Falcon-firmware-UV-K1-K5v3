@@ -1017,7 +1017,8 @@ static uint8_t app_read_validated_header(uint8_t slot, app_header_t *h)
 
 /* Resolve an optional configuration-proxy descriptor from the running app's
  * asset prefix.  The descriptor is declarative: resident code knows nothing
- * about APRS or any other editor/target pair. */
+ * about APRS or any other editor/target pair.  The target may be the running
+ * app itself: a block of its own assets then persists more than 16 bytes. */
 static __attribute__((noinline)) void app_config_proxy_resolve(void)
 {
     app_state.cfg_proxy = false;
@@ -1042,7 +1043,7 @@ static __attribute__((noinline)) void app_config_proxy_resolve(void)
 
     for (uint8_t slot = 0; slot < APP_SLOT_COUNT; slot++) {
         app_header_t target;
-        if (slot == app_state.run_slot || app_read_validated_header(slot, &target) != APP_OK ||
+        if (app_read_validated_header(slot, &target) != APP_OK ||
             memcmp(target.name, proxy.target_name, APP_NAME_LEN) != 0 ||
             proxy.target_offset > target.asset_size ||
             proxy.target_len > target.asset_size - proxy.target_offset)

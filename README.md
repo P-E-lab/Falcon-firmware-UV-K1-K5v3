@@ -4,15 +4,17 @@ Firmware pour UV-K1 / Sonic 4K, dérivé de Sonic et compatible avec les applica
 
 ## Contenu
 
-- `firmware/Falcon4K_v3.0.0-OA.bin` : firmware et installateur automatique tout-en-un.
+- `firmware/Falcon4K_v3.1.1-OA.bin` : firmware et installateur automatique tout-en-un (3.1.1 : une app peut sauvegarder un bloc de ses propres données, utilisé par FCatch).
 - `Falcon apps/FGuide.app` : mémo des touches de Falcon sur la radio (10 rubriques, en anglais).
 - `Falcon apps/FSystemInfo.app` : informations système de Falcon (firmware, mémoire, pile, batterie, identité).
+- `Falcon apps/FCatch.app` : capture des émetteurs proches (Close Call) avec tonalité, nom du canal mémoire, filtre des bandes du Spectre et historique de 17 entrées sauvegardé (Falcon 3.1.1 ou plus).
 - `Falcon apps/FMessage.app` et `Falcon apps/FMessageOption.app` : messagerie entre radios (FMessage 3.0) et ses réglages (« FMessOption » dans la liste des apps). Les installer ensemble.
 - `F4WHN apps` : les 46 applications officielles F4HWN disponibles (version 6.3.0), optionnelles.
 - `chirp/falcon.chirp.v3.1.0.py` : pilote CHIRP avec les quatre canaux prioritaires, SetRxG et les raccourcis REVERSE FQ, MESSAGES et FMESSAGE.
 - `sources/runtime` : sources complètes du firmware, pilotes et dépendances embarquées.
 - `sources/installer` : sources de l'installateur temporaire (il réutilise les pilotes de `sources/runtime`).
 - `sources/fguide`, `sources/fsysteminfo` : sources de FGuide et FSystemInfo.
+- `sources/fcatch` : sources de FCatch (capture et tonalités dérivées de FSearch / GOGUFW Search, Apache-2.0).
 - `sources/fmessage` : sources et tests de FMessage et FMessOption.
 - `tools`, `validation/tests`, `Dockerfile`, `build-with-docker.sh` : compilation et tests.
 - `LICENSE`, `NOTICE` : licences et attributions. Les sources tierces conservent leurs mentions.
