@@ -20,6 +20,9 @@
 #define REG_CTCSS  0x68u
 #define REG_DCS_H  0x69u
 #define REG_DCS_L  0x6au
+/* Resident RX registers saved at launch and written back before each scan:
+ * the frequency scan then runs in the very state FSearch starts it from. */
+static const uint8_t RESTORE[7] = {0x33u, 0x37u, 0x38u, 0x39u, 0x51u, 0x47u, 0x30u};
 #define LNA_VHF    0x04u /* BK4819 GPIO4, 0x40 >> 4 */
 #define LNA_UHF    0x08u /* BK4819 GPIO3, 0x40 >> 3 */
 #define CHANNELS   0x1de000u /* Falcon 4096-channel layout: 16 B per channel */
@@ -50,7 +53,7 @@ static struct {
     uint32_t *blocked;
     uint32_t scan_prev, hold_f;
     char chname[9];
-    uint16_t gpio, channels;
+    uint16_t saved[7], channels; /* resident RX registers, see RESTORE */
     uint8_t nblocked, bslot, scan_hits, low, last_tone, tone_hits;
     bool holding, memory;
 } G;
@@ -63,7 +66,7 @@ static struct {
 #define HF        cfg.f
 #define HT        cfg.tone
 #define HH        cfg.hits
-#define gpio      G.gpio
+#define gpio      G.saved[0]
 #define channels  G.channels
 #define hcount    cfg.count
 #define nblocked  G.nblocked
@@ -216,12 +219,14 @@ static void tune(uint32_t f)
     A->bk_write(0x37u, 0x9f1fu); /* BK4829 RX_TurnOn value */
     rx_on();
 }
-static void scan_start(void)
+static void scan_start(bool restore)
 {
     holding = false; scan_hits = 0; scan_prev = 0;
     A->audio_path(false); A->led(false);
-    A->bk_write(REG_GPIO, gpio);
-    rx_on();
+    if (restore) {
+        A->bk_write(REG_RX, 0u);
+        for (uint8_t i = 0; i < 7u; i++) A->bk_write(RESTORE[i], G.saved[i]);
+    }
     A->bk_write(REG_SCAN, 0x0245u);
 }
 static void history_add(uint32_t f)
@@ -271,14 +276,14 @@ static bool poll(void) /* true when the live screen must be redrawn */
         const uint32_t d = f > scan_prev ? f - scan_prev : scan_prev - f;
         scan_hits = f && d < 100u ? (uint8_t)(scan_hits + 1u) : 0u; scan_prev = f;
         A->bk_write(REG_SCAN, 0x0244u);
-        if (scan_hits < 2u) { A->bk_write(REG_SCAN, 0x0245u); return false; }
+        if (scan_hits < 3u) { A->bk_write(REG_SCAN, 0x0245u); return false; } /* as FSearch */
         if (capture(f)) return true;
-        scan_start();
+        scan_start(true);
         return false;
     }
     /* End: weak, or FM noise back (the raw RSSI floor can sit above the threshold). */
     if (rssi() < -(int)cfg.sqm - 3 || (A->bk_read(0x65u) & 0x7fu) > 45u) {
-        if (++low >= 15u) { scan_start(); return true; }
+        if (++low >= 15u) { scan_start(true); return true; }
     } else low = 0;
     if (HT[0]) return false;
     uint8_t t = 0;
@@ -291,9 +296,9 @@ static bool poll(void) /* true when the live screen must be redrawn */
         if (i == last_tone && ++tone_hits >= 2u) t = (uint8_t)(i + 1u);
         if (i != last_tone) { last_tone = i; tone_hits = 0; }
     } else return false;
-    A->bk_write(REG_CSS, 0x0300u); /* next reading, as the Spectre does: no RX restart */
+    if (!t) { tune(hold_f); return false; } /* re-arm the detector, as FSearch */
     HT[0] = t;
-    return t != 0;
+    return true;
 }
 
 /* ---- keys ---- */
@@ -384,7 +389,10 @@ static bool list(bool bands)
                 line(s, l, false);
                 *s = 'X'; num(s + 1, HH[i]); tiny_right(s, (uint8_t)(8u * l + 1u));
             }
-            if (i == sel) for (uint8_t x = 0; x < 128u; x++) A->fb[l][x] ^= 0xffu;
+            if (i == sel) { /* rows 8l-1 .. 8l+7: one pixel above and below the text */
+                uint8_t *row = A->fb[l - 1];
+                for (uint8_t x = 0; x < 128u; x++) { row[x] ^= 0x80u; row[x + 128u] ^= 0xffu; }
+            }
         }
         if (!n) line(bands ? "NO BAND" : "EMPTY", 3, true);
         footer(!n ? "" : bands ? "MENU:TOGGLE" : "MENU:VFO 2:MEM 3:DEL", "EXIT");
@@ -419,8 +427,8 @@ __attribute__((section(".text.entry"))) void app_main(const app_api_t *api)
     if (cfg.magic != STORE_MAGIC || cfg.count > HMAX || !memory) {
         cfg.magic = STORE_MAGIC; cfg.sqm = 115; cfg.listen = 1; cfg.count = 0; cfg.mask = 0;
     }
-    gpio = A->bk_read(REG_GPIO);
-    scan_start();
+    for (uint8_t i = 0; i < 7u; i++) G.saved[i] = A->bk_read(RESTORE[i]);
+    scan_start(false);
     bool redraw = true;
     uint8_t ticks = 0;
     for (;;) {
@@ -432,7 +440,7 @@ __attribute__((section(".text.entry"))) void app_main(const app_api_t *api)
         if (key == APP_KEY_STAR && holding) {
             blocked[bslot] = hold_f; bslot = (uint8_t)((bslot + 1u) % BMAX);
             if (nblocked < BMAX) nblocked++;
-            scan_start(); redraw = true;
+            scan_start(true); redraw = true;
         }
         if (key == APP_KEY_9) { nblocked = bslot = 0; redraw = true; }
         if (key == APP_KEY_UP && cfg.sqm > 40u) { cfg.sqm--; redraw = true; } /* UP raises the threshold */
@@ -441,7 +449,7 @@ __attribute__((section(".text.entry"))) void app_main(const app_api_t *api)
             A->bk_write(REG_SCAN, 0x0244u);
             A->audio_path(false);
             if (list(key == APP_KEY_MENU)) break;
-            scan_start(); redraw = true;
+            scan_start(true); redraw = true;
         }
         if (poll()) redraw = true;
         A->delay_ms(20);
