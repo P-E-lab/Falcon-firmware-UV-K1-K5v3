@@ -1,4 +1,4 @@
-# Falcon 4K v3.0.0-OA
+# Falcon 4K v3.1.1-OA
 
 Firmware pour UV-K1 / Sonic 4K, dérivé de Sonic et compatible avec les applications F4HWN v7 (64 emplacements Apps).
 
@@ -7,7 +7,12 @@ Firmware pour UV-K1 / Sonic 4K, dérivé de Sonic et compatible avec les applica
 - `firmware/Falcon4K_v3.1.1-OA.bin` : firmware et installateur automatique tout-en-un (3.1.1 : une app peut sauvegarder un bloc de ses propres données, utilisé par FCatch).
 - `Falcon apps/FGuide.app` : mémo des touches de Falcon sur la radio (10 rubriques, en anglais).
 - `Falcon apps/FSystemInfo.app` : informations système de Falcon (firmware, mémoire, pile, batterie, identité).
-- `Falcon apps/FCatch.app` : capture des émetteurs proches (Close Call) avec tonalité, nom du canal mémoire, filtre des bandes du Spectre et historique de 17 entrées sauvegardé (Falcon 3.1.1 ou plus).
+- `Falcon apps/FCatch.app` : capture des émetteurs proches (Close Call) avec tonalité, nom du canal mémoire, choix VHF / UHF / VHF+UHF, blocage des fréquences (SK2) et historique de 17 entrées sauvegardé (Falcon 3.1.1 ou plus).
+- `Falcon apps/FirstAid.app` : gestes de premiers secours (ERC 2025) et métronome de RCP.
+- `Falcon apps/FSurvival.app` : conseils de survie et balise SOS à la lampe.
+- `Falcon apps/FMorse.app` : envoi de messages en Morse, à la lampe ou par radio (anciennement Morse).
+- `Falcon apps/FSnake.app` : jeu Snake (anciennement Snake F).
+- `Falcon apps/Translations` : FirstAid et FSurvival en français (FR), espagnol (ES) et polonais (PL).
 - `Falcon apps/FMessage.app` et `Falcon apps/FMessageOption.app` : messagerie entre radios (FMessage 3.0) et ses réglages (« FMessOption » dans la liste des apps). Les installer ensemble.
 - `F4WHN apps` : les 46 applications officielles F4HWN disponibles (version 6.3.0), optionnelles.
 - `chirp/falcon.chirp.v3.1.0.py` : pilote CHIRP avec les quatre canaux prioritaires, SetRxG et les raccourcis REVERSE FQ, MESSAGES et FMESSAGE.
@@ -15,6 +20,7 @@ Firmware pour UV-K1 / Sonic 4K, dérivé de Sonic et compatible avec les applica
 - `sources/installer` : sources de l'installateur temporaire (il réutilise les pilotes de `sources/runtime`).
 - `sources/fguide`, `sources/fsysteminfo` : sources de FGuide et FSystemInfo.
 - `sources/fcatch` : sources de FCatch (capture et tonalités dérivées de FSearch / GOGUFW Search, Apache-2.0).
+- `sources/firstaid`, `sources/fsurvival`, `sources/fmorse`, `sources/fsnake` : sources de FirstAid, FSurvival (avec leurs traductions), FMorse et FSnake.
 - `sources/fmessage` : sources et tests de FMessage et FMessOption.
 - `tools`, `validation/tests`, `Dockerfile`, `build-with-docker.sh` : compilation et tests.
 - `LICENSE`, `NOTICE` : licences et attributions. Les sources tierces conservent leurs mentions.
@@ -27,13 +33,13 @@ Pour conserver le firmware principal : démarrer ce firmware, ouvrir Firmware Sl
 
 Pour remplacer le firmware principal : utiliser Firmware Flash / DFU avec le même BIN.
 
-Au premier lancement, laisser l'écran d'installation « FALCON v3.0.0 » et « Powering Up » terminer son travail jusqu'au redémarrage automatique. Ne pas couper l'alimentation pendant l'installation ; une coupure est toutefois reprise au démarrage suivant, dans le même slot. Aucun clic « Installer les assets » n'est nécessaire.
+Au premier lancement, laisser l'écran d'installation « FALCON v3.1.1 » et « Powering Up » terminer son travail jusqu'au redémarrage automatique. Ne pas couper l'alimentation pendant l'installation ; une coupure est toutefois reprise au démarrage suivant, dans le même slot. Aucun clic « Installer les assets » n'est nécessaire.
 
 Si l'écran d'installation affiche `S 04 E 10`, l'installation a été refusée sans rien effacer : la zone de Falcon contient des applications écrites par un autre firmware (emplacements Apps 80 à 99 d'un futur F4HWN). Appuyer sur PTT restaure le firmware principal.
 
 Si Falcon affiche « MODULES MISSING / REINSTALL FALCON », ses modules en mémoire externe ont été effacés ou remplacés : réécrire le même BIN.
 
-Les applications (FGuide, FSystemInfo et celles de `F4WHN apps`) s'installent séparément dans l'onglet Apps d'UVStudio, au choix. Elles se lancent depuis le menu des apps (F+5) dans Falcon.
+Les applications (celles de `Falcon apps` et de `F4WHN apps`) s'installent séparément dans l'onglet Apps d'UVStudio, au choix. Elles se lancent depuis le menu des apps (F+5) dans Falcon.
 
 ## Organisation de la mémoire
 
