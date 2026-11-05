@@ -87,6 +87,15 @@ static void text5(const char *s, uint8_t x, uint8_t y)
     }
 }
 
+/* text5 centered on the 128 px screen. */
+static void center5(const char *s, uint8_t y)
+{
+    uint8_t n = 0;
+    while (s[n])
+        n++;
+    text5(s, (uint8_t)((128u - 6u * n) / 2u), y);
+}
+
 /* ---- text blob ---- */
 static void text_read(uint16_t offset, void *dst, uint16_t len)
 {
@@ -230,8 +239,8 @@ static void draw_home(uint8_t selected, uint8_t top)
                     A->fb[py >> 3][x] ^= (uint8_t)(1u << (py & 7u));
     }
     scroll_bar(top, ROWS_HOME, SECTIONS, 49);
-    text5("MENU/1-0: OPEN", 1, 50);
-    text5("EXIT", 104, 50);
+    text5(UI_OPEN, 1, 50);
+    text5(UI_EXIT, 128u - 6u * (sizeof UI_EXIT - 1u), 50);
     A->blit_full();
 }
 
@@ -269,11 +278,11 @@ static bool beacon(void)
 {
     static const uint8_t steps[18] = {1, 1, 1, 1, 1, 3, 3, 1, 3, 1, 3, 3, 1, 1, 1, 1, 1, 7};
     A->display_clear();
-    set_title("SOS BEACON");
+    set_title(UI_SOS);
     status();
-    text5("TORCH: ... --- ...", 10, 8);
-    text5("AIM AT RESCUERS", 19, 22);
-    text5("EXIT: STOP", 34, 36);
+    center5(UI_TORCH, 8);
+    center5(UI_AIM, 22);
+    center5(UI_STOP, 36);
     A->blit_full();
     uint8_t i = 0;
     uint32_t next = A->ticks_ms();

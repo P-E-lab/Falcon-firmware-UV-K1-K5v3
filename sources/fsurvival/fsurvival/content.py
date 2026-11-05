@@ -100,3 +100,14 @@ SECTIONS = [
         ("BEFORE", "NOTE THE LOCAL REPEATERS"),
     ]),
 ]
+
+MENU = 5  # SIGNALS: MENU starts the SOS beacon
+# Interface strings (21 characters at most).
+UI = {
+    'OPEN': "MENU/1-0: OPEN",
+    'EXIT': "EXIT",
+    'SOS': "SOS BEACON",
+    'TORCH': "TORCH: ... --- ...",
+    'AIM': "AIM AT RESCUERS",
+    'STOP': "EXIT: STOP",
+}

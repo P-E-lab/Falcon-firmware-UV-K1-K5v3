@@ -138,3 +138,16 @@ SECTIONS = [
         ("ALLERGY", "SWOLLEN FACE, HARD BREATHING: CALL. OWN AUTO-INJECTOR: USE IT IN THE THIGH"),
     ]),
 ]
+
+MENU = 3  # CPR: MENU starts the metronome
+# Interface strings (21 characters at most).
+UI = {
+    'OPEN': "MENU/1-0: OPEN",
+    'EXIT': "EXIT",
+    'CPR': "CPR 110/MIN",
+    'PUSH_ONLY': "PUSH ONLY",
+    'BREATHS': "GIVE 2 BREATHS",
+    'AGAIN': "MENU: PUSH AGAIN",
+    'PUSHES': "30 PUSHES, 2 BREATHS",
+    'MODE': "0: MODE",
+}

@@ -85,6 +85,15 @@ static void text5(const char *s, uint8_t x, uint8_t y)
     }
 }
 
+/* text5 centered on the 128 px screen. */
+static void center5(const char *s, uint8_t y)
+{
+    uint8_t n = 0;
+    while (s[n])
+        n++;
+    text5(s, (uint8_t)((128u - 6u * n) / 2u), y);
+}
+
 /* ---- text blob ---- */
 static void text_read(uint16_t offset, void *dst, uint16_t len)
 {
@@ -228,8 +237,8 @@ static void draw_home(uint8_t selected, uint8_t top)
                     A->fb[py >> 3][x] ^= (uint8_t)(1u << (py & 7u));
     }
     scroll_bar(top, ROWS_HOME, SECTIONS, 49);
-    text5("MENU/1-0: OPEN", 1, 50);
-    text5("EXIT", 104, 50);
+    text5(UI_OPEN, 1, 50);
+    text5(UI_EXIT, 128u - 6u * (sizeof UI_EXIT - 1u), 50);
     A->blit_full();
 }
 
@@ -263,19 +272,19 @@ static uint8_t poll_key(void)
 static void draw_metronome(uint8_t count, bool push_only)
 {
     A->display_clear();
-    set_title("CPR 110/MIN");
+    set_title(UI_CPR);
     status();
     const char digits[3] = {count < 10u ? ' ' : (char)('0' + count / 10u), (char)('0' + count % 10u), 0};
     A->display_freq(digits, 51, 1, false);
     if (push_only)
-        text5("PUSH ONLY", 37, 30);
+        center5(UI_PUSH_ONLY, 30);
     else if (count == PUSHES) {
-        text5("GIVE 2 BREATHS", 22, 30);
-        text5("MENU: PUSH AGAIN", 16, 38);
+        center5(UI_BREATHS, 30);
+        center5(UI_AGAIN, 38);
     } else
-        text5("30 PUSHES, 2 BREATHS", 4, 30);
-    text5("0: MODE", 1, 50);
-    text5("EXIT", 104, 50);
+        center5(UI_PUSHES, 30);
+    text5(UI_MODE, 1, 50);
+    text5(UI_EXIT, 128u - 6u * (sizeof UI_EXIT - 1u), 50);
     A->blit_full();
 }
 
@@ -338,7 +347,7 @@ static bool page(uint8_t s)
             return true;
         if (key == APP_KEY_PTT)
             return false;
-        if (key == APP_KEY_MENU && s == TEXT_CPR && !metronome())
+        if (key == APP_KEY_MENU && s == TEXT_MENU && !metronome())
             return false;
         if (key == APP_KEY_UP && top)
             top--;
