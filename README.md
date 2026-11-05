@@ -2,6 +2,8 @@
 
 Firmware pour UV-K1 / Sonic 4K, dérivé de Sonic et compatible avec les applications F4HWN v7 (64 emplacements Apps).
 
+**Guide utilisateur (EN) : [docs/Falcon_v3.1.1_User_Guide_EN.pdf](docs/Falcon_v3.1.1_User_Guide_EN.pdf)**. Les guides de chaque version sont aussi joints aux [Releases](../../releases).
+
 ## Contenu
 
 - `firmware/Falcon4K_v3.1.1-OA.bin` : firmware et installateur automatique tout-en-un (3.1.1 : une app peut sauvegarder un bloc de ses propres données, utilisé par FCatch).
