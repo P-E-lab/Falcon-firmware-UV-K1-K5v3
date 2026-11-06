@@ -525,7 +525,8 @@ __attribute__((noinline)) uint8_t INS_Run(void)
     h.flags = MB_FLAG_COMMITTED;
     h.image_size = fwlen;
     h.image_crc32 = install_meta[META_FW_CRC];
-    memcpy(h.name, "Falcon 4K", 9);
+    _Static_assert(sizeof(INSTALL_EDITION) <= sizeof h.name, "slot name");
+    memcpy(h.name, INSTALL_EDITION, sizeof(INSTALL_EDITION) - 1);
     memcpy(h.fw_version, "v" VERSION_STRING_2, sizeof("v" VERSION_STRING_2));
     if (INS_Write(MB_SLOT0_EXT_BASE + slot * MB_SLOT_STRIDE, &h, sizeof h))
         return MB_ERR_SPI;

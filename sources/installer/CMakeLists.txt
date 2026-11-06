@@ -20,6 +20,9 @@ enable_language(C ASM)
 # One version for both images: read it from the runtime presets.
 file(READ "${RUNTIME_DIR}/CMakePresets.json" RUNTIME_PRESETS)
 string(JSON VERSION_STRING_2 GET "${RUNTIME_PRESETS}" configurePresets 0 cacheVariables VERSION_STRING_2)
+# Slot name written in the header of the installed firmware: Falcon 1K or
+# Falcon 4K (tools/build-local.sh passes the edition of the payload).
+set(INSTALL_EDITION "Falcon 4K" CACHE STRING "Edition of the installed firmware")
 
 if(TARGET)
     set(EXE_NAME ${TARGET})

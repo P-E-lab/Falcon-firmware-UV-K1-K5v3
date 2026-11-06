@@ -9,6 +9,7 @@ target_compile_definitions(App INTERFACE
     ENABLE_FEAT_F4HWN_MULTIBOOT_OVERLAY
     EDITION_STRING="Falcon"
     VERSION_STRING_2="${VERSION_STRING_2}"
+    INSTALL_EDITION="${INSTALL_EDITION}"
 )
 target_sources(App INTERFACE
     main.c
