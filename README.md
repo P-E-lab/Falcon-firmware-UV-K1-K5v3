@@ -133,3 +133,5 @@ The ARM tests run the built firmware with simulated peripherals; they do not rep
 ## Integrity
 
 `SHA256SUMS` holds the fingerprints of the files of the archive, except this file itself.
+
+Falcon firmware is coded using Claude Code.

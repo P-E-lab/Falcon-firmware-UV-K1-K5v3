@@ -133,3 +133,5 @@ Las pruebas ARM ejecutan el firmware compilado con periféricos simulados; no su
 ## Integridad
 
 `SHA256SUMS` contiene las huellas de los archivos del archivo, salvo este mismo archivo.
+
+El firmware Falcon está programado con Claude Code.

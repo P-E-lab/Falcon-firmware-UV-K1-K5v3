@@ -133,3 +133,5 @@ Les tests ARM exécutent le firmware compilé avec des périphériques simulés 
 ## Intégrité
 
 `SHA256SUMS` contient les empreintes des fichiers de l'archive, hors ce fichier lui-même.
+
+Le firmware Falcon est codé avec Claude Code.
