@@ -1,8 +1,15 @@
-# Falcon 4K v3.1.1-OA
+# Falcon v3.1.1-OA
 
 **English** | [Français](README.fr.md) | [Español](README.es.md)
 
-Firmware for UV-K1 / K5(v3), derived from Sonic and compatible with the F4HWN v7 apps (64 app slots).
+Firmware for UV-K1 / K5(v3), derived from Sonic and compatible with F4HWN (64 app slots).
+
+- Clear screens, Keys Infos help on F (#), and two scan speeds: Normal for reliable detection (~300 channels/s) and FastScan to sweep many channels quickly (~500 channels/s).
+- Full Watch follows both VFOs and up to four priority channels; Multilist Watch scans your memory lists in the background.
+- Scan straight from the VFO: Long * scans the channel's list, F + * scans all channels in FastScan, and with A and B in frequency mode, Long * scans the range between them, keeping the VFO display.
+- Spectrum and Sentinel scan lists, bands or ranges, with a History of up to 200 detections and blacklists.
+- Channels, lists and bands are created and edited directly from the keypad, no computer needed.
+- One-file install, multiboot with F4HWN or Sonic, F4HWN apps supported, and two editions: Falcon 4K (4096 channels) and Falcon 1K (1024 channels with their own settings).
 
 **User guide (EN): [docs/Falcon_v3.1.1_User_Guide_EN.pdf](docs/Falcon_v3.1.1_User_Guide_EN.pdf)**. The guide of each version is also attached to the [Releases](../../releases).
 
@@ -33,7 +40,7 @@ Firmware for UV-K1 / K5(v3), derived from Sonic and compatible with the F4HWN v7
 
 ## Installation
 
-Use a UVStudio version compatible with the v7 format and the 64 app slots.
+Use a UVStudio version that supports the 64 app slots.
 
 To keep the main firmware: boot that firmware, open Firmware Slots in UVStudio, write the BIN to a free slot 1 to 4, then restart while holding MENU to choose that slot.
 
@@ -63,13 +70,13 @@ After directly entering a channel number without a list, the arrows browse the c
 
 History: the "HISTORY" action (F1/F2 short or long, M long) opens the history from the VFO, without starting a scan; the title moves to the status bar and the list gains a line. In Spectrum, Sentinel and from the VFO, a listened entry (arrows) uses its own modulation and bandwidth; long press on 1: the entry's frequency goes to the main VFO (frequency mode) and the screen returns to the VFO.
 
-Messages: `*` switches between the HISTORY page and the MESSAGES page (the scan and the reception are stopped on MESSAGES). Each message received by FMessage is saved there automatically (external memory 0x012000, two 4 KB sectors, a free area in F4HWN v7); the 32 latest are listed as "01-AA: START", newest first, with an arrival number from 01 to 32 (it does not change after a deletion and restarts at 01 after CLEAR ALL) and a dotted line between two FMessage sessions. `M` opens the message, `6` deletes it (DELETE?), long `6` clears everything (CLEAR ALL?). The "MESSAGES" action (F1/F2, M long) opens the history directly on this page. Screen, reading and deletion are in the external "messages" module. The RX/TX log no longer exists.
+Messages: `*` switches between the HISTORY page and the MESSAGES page (the scan and the reception are stopped on MESSAGES). Each message received by FMessage is saved there automatically (external memory 0x012000, two 4 KB sectors, a free area in F4HWN); the 32 latest are listed as "01-AA: START", newest first, with an arrival number from 01 to 32 (it does not change after a deletion and restarts at 01 after CLEAR ALL) and a dotted line between two FMessage sessions. `M` opens the message, `6` deletes it (DELETE?), long `6` clears everything (CLEAR ALL?). The "MESSAGES" action (F1/F2, M long) opens the history directly on this page. Screen, reading and deletion are in the external "messages" module. The RX/TX log no longer exists.
 
 FMessage: the "FMESSAGE" action (F1/F2, M long) opens the FMessage app (app shortcut 15); double beep if it is not installed.
 
 REVERSE: "REVERSE:" ON/OFF line in the channel editor, "REVERSE FQ" action, "R" indicator in place of +/-; as in F4HWN, the setting is saved and also works in frequency mode.
 
-Received audio aligned on F4HWN v7: chip default values in FM, AM and USB, SetRxG menu (RX noise gate, ON by default, forced ON with the RX compander; byte 0x00A0C0 as in F4HWN), compander fixed for the BK4829. TX powers and 1750 Hz tone level as in F4HWN v7; the 1750 Hz tone is heard in the speaker.
+Received audio aligned on F4HWN: chip default values in FM, AM and USB, SetRxG menu (RX noise gate, ON by default, forced ON with the RX compander; byte 0x00A0C0 as in F4HWN), compander fixed for the BK4829. TX powers and 1750 Hz tone level as in F4HWN; the 1750 Hz tone is heard in the speaker.
 
 VFO saving: the frequency and the channel number are saved 3 s after the last change (less memory wear), and immediately before a transmission, the menu, a scan or an app.
 

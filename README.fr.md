@@ -1,8 +1,15 @@
-# Falcon 4K v3.1.1-OA
+# Falcon v3.1.1-OA
 
 [English](README.md) | **Français** | [Español](README.es.md)
 
-Firmware pour UV-K1 / K5(v3), dérivé de Sonic et compatible avec les applications F4HWN v7 (64 emplacements Apps).
+Firmware pour UV-K1 / K5(v3), dérivé de Sonic et compatible avec F4HWN (64 emplacements Apps).
+
+- Écrans clairs, aide Keys Infos sur F (#), et deux vitesses de scan : Normal pour une détection fiable (~300 canaux/s) et FastScan pour balayer rapidement beaucoup de canaux (~500 canaux/s).
+- Full Watch suit les deux VFO et jusqu'à quatre canaux prioritaires ; Multilist Watch scanne vos listes mémoire en arrière-plan.
+- Scan directement depuis le VFO : Long * scanne la liste du canal, F + * scanne tous les canaux en FastScan, et avec A et B en mode fréquence, Long * scanne la plage entre les deux, en gardant l'affichage du VFO.
+- Le Spectre et la Sentinelle scannent des listes, des bandes ou des plages, avec un historique de 200 détections et des listes noires.
+- Canaux, listes et bandes se créent et se modifient directement au clavier, sans ordinateur.
+- Installation en un fichier, multiboot avec F4HWN ou Sonic, apps F4HWN acceptées, et deux éditions : Falcon 4K (4096 canaux) et Falcon 1K (1024 canaux avec leurs propres réglages).
 
 **Guide utilisateur (FR) : [docs/Falcon_v3.1.1_User_Guide_FR.pdf](docs/Falcon_v3.1.1_User_Guide_FR.pdf)**. Les guides de chaque version sont aussi joints aux [Releases](../../releases).
 
@@ -33,7 +40,7 @@ Firmware pour UV-K1 / K5(v3), dérivé de Sonic et compatible avec les applicati
 
 ## Installation
 
-Utiliser UVStudio compatible avec le format v7 et les 64 emplacements Apps.
+Utiliser une version d'UVStudio qui gère les 64 emplacements Apps.
 
 Pour conserver le firmware principal : démarrer ce firmware, ouvrir Firmware Slots dans UVStudio, écrire le BIN dans un slot libre 1 à 4, puis redémarrer en maintenant MENU pour choisir ce slot.
 
@@ -63,13 +70,13 @@ Après saisie directe d'un numéro de canal sans liste, les flèches parcourent 
 
 Historique : l'action « HISTORY » (F1/F2 court ou long, M long) ouvre l'historique depuis le VFO, sans lancer de scan ; le titre passe dans la barre d'état et la liste gagne une ligne. Dans Spectre, Sentinel et depuis le VFO, une entrée écoutée (flèches) utilise sa propre modulation et sa largeur de bande ; appui long sur 1 : la fréquence de l'entrée passe dans le VFO principal (mode fréquence) et l'écran revient au VFO.
 
-Messages : `*` bascule entre la page HISTORY et la page MESSAGES (le scan et la réception sont arrêtés sur MESSAGES). Chaque message reçu par FMessage y est enregistré automatiquement (mémoire externe 0x012000, deux secteurs de 4 Ko, zone libre dans F4HWN v7) ; les 32 derniers sont listés « 01-AA: DEBUT », du plus récent au plus ancien, avec un numéro d'arrivée de 01 à 32 (il ne change pas après une suppression et repart à 01 après CLEAR ALL) et une ligne pointillée entre deux ouvertures de FMessage. `M` ouvre le message, `6` le supprime (DELETE ?), `6` long efface tout (CLEAR ALL ?). L'action « MESSAGES » (F1/F2, M long) ouvre l'historique directement sur cette page. Écran, lecture et suppression sont dans le module externe « messages ». Le journal RX/TX n'existe plus.
+Messages : `*` bascule entre la page HISTORY et la page MESSAGES (le scan et la réception sont arrêtés sur MESSAGES). Chaque message reçu par FMessage y est enregistré automatiquement (mémoire externe 0x012000, deux secteurs de 4 Ko, zone libre dans F4HWN) ; les 32 derniers sont listés « 01-AA: DEBUT », du plus récent au plus ancien, avec un numéro d'arrivée de 01 à 32 (il ne change pas après une suppression et repart à 01 après CLEAR ALL) et une ligne pointillée entre deux ouvertures de FMessage. `M` ouvre le message, `6` le supprime (DELETE ?), `6` long efface tout (CLEAR ALL ?). L'action « MESSAGES » (F1/F2, M long) ouvre l'historique directement sur cette page. Écran, lecture et suppression sont dans le module externe « messages ». Le journal RX/TX n'existe plus.
 
 FMessage : l'action « FMESSAGE » (F1/F2, M long) ouvre l'app FMessage (raccourci d'app 15) ; double bip si elle n'est pas installée.
 
 REVERSE : ligne « REVERSE: » ON/OFF dans l'éditeur de canal, action « REVERSE FQ », indicateur « R » à la place du +/- ; comme F4HWN, réglage enregistré, valable aussi en mode fréquence.
 
-Audio en réception aligné sur F4HWN v7 : valeurs d'origine de la puce en FM, AM et USB, menu SetRxG (porte de bruit RX, ON par défaut, forcée sur ON avec le compander RX ; octet 0x00A0C0 comme F4HWN), compander corrigé pour le BK4829. Puissances d'émission et niveau de la tonalité 1750 Hz comme F4HWN v7 ; la tonalité 1750 s'entend dans le haut-parleur.
+Audio en réception aligné sur F4HWN : valeurs d'origine de la puce en FM, AM et USB, menu SetRxG (porte de bruit RX, ON par défaut, forcée sur ON avec le compander RX ; octet 0x00A0C0 comme F4HWN), compander corrigé pour le BK4829. Puissances d'émission et niveau de la tonalité 1750 Hz comme F4HWN ; la tonalité 1750 s'entend dans le haut-parleur.
 
 Sauvegarde du VFO : la fréquence et le numéro de canal sont enregistrés 3 s après le dernier changement (moins d'usure de la mémoire), et aussitôt avant une émission, le menu, un scan ou une app.
 
