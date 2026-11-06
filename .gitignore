@@ -10,3 +10,6 @@ sources/*/*/*.elf
 sources/*/*/*.map
 sources/*/*/*_assets.h
 sources/*/*/text_tail.h
+
+# Kept locally, not published
+Radio Listening Guide/
