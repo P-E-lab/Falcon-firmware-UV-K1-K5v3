@@ -1,106 +1,108 @@
 # Falcon 4K v3.1.1-OA
 
-Firmware pour UV-K1 / Sonic 4K, dérivé de Sonic et compatible avec les applications F4HWN v7 (64 emplacements Apps).
+**English** | [Français](README.fr.md)
 
-**Guide utilisateur (EN) : [docs/Falcon_v3.1.1_User_Guide_EN.pdf](docs/Falcon_v3.1.1_User_Guide_EN.pdf)**. Les guides de chaque version sont aussi joints aux [Releases](../../releases).
+Firmware for the UV-K1 / Sonic 4K, derived from Sonic and compatible with the F4HWN v7 apps (64 app slots).
 
-## Contenu
+**User guide (EN): [docs/Falcon_v3.1.1_User_Guide_EN.pdf](docs/Falcon_v3.1.1_User_Guide_EN.pdf)**. The guide of each version is also attached to the [Releases](../../releases).
 
-- `firmware/Falcon4K_v3.1.1-OA.bin` : firmware et installateur automatique tout-en-un (3.1.1 : une app peut sauvegarder un bloc de ses propres données, utilisé par FCatch).
-- `firmware/Falcon1K_v3.1.1-OA.bin` : Falcon 1K, la même version avec 1024 canaux rangés dans les réglages propres à son slot (format F4HWN). En multiboot avec Sonic 4K, chacun garde ses réglages et ses canaux. La Falcon 4K, elle, partage ses 4096 canaux avec Sonic 4K.
-- `Falcon apps/FGuide.app` : mémo des touches de Falcon sur la radio (10 rubriques, en anglais).
-- `Falcon apps/FSystemInfo.app` : informations système de Falcon (firmware, mémoire, pile, batterie, identité).
-- `Falcon apps/FCatch.app` : capture des émetteurs proches (Close Call) avec tonalité, nom du canal mémoire, choix VHF / UHF / VHF+UHF, blocage des fréquences (SK2) et historique de 17 entrées sauvegardé (Falcon 3.1.1 ou plus).
-- `Falcon apps/FirstAid.app` : gestes de premiers secours (ERC 2025) et métronome de RCP.
-- `Falcon apps/FSurvival.app` : conseils de survie et balise SOS à la lampe.
-- `Falcon apps/FMorse.app` : envoi de messages en Morse, à la lampe ou par radio (anciennement Morse).
-- `Falcon apps/FSnake.app` : jeu Snake (anciennement Snake F).
-- `Falcon apps/Translations` : FirstAid et FSurvival en français (FR), espagnol (ES) et polonais (PL).
-- `Falcon apps/FMessage.app` et `Falcon apps/FMessageOption.app` : messagerie entre radios (FMessage 3.0) et ses réglages (« FMessOption » dans la liste des apps). Les installer ensemble.
-- `F4WHN apps` : les 46 applications officielles F4HWN disponibles (version 6.3.0), optionnelles.
-- `chirp/falcon4k.chirp.v3.1.1.py` : pilote CHIRP de la Falcon 4K (anciennement `falcon.chirp.v3.1.0.py`), avec les quatre canaux prioritaires, SetRxG et les raccourcis REVERSE FQ, MESSAGES et FMESSAGE.
-- `chirp/falcon1k.chirp.v3.1.1.py` : pilote CHIRP de la Falcon 1K (mémoires 995 à 1024 : les bandes). Chaque pilote refuse l'autre édition.
-- `sources/runtime` : sources complètes du firmware, pilotes et dépendances embarquées.
-- `sources/installer` : sources de l'installateur temporaire (il réutilise les pilotes de `sources/runtime`).
-- `sources/fguide`, `sources/fsysteminfo` : sources de FGuide et FSystemInfo.
-- `sources/fcatch` : sources de FCatch (capture et tonalités dérivées de FSearch / GOGUFW Search, Apache-2.0).
-- `sources/firstaid`, `sources/fsurvival`, `sources/fmorse`, `sources/fsnake` : sources de FirstAid, FSurvival (avec leurs traductions), FMorse et FSnake.
-- `sources/fmessage` : sources et tests de FMessage et FMessOption.
-- `tools`, `validation/tests`, `Dockerfile`, `build-with-docker.sh` : compilation et tests.
-- `LICENSE`, `NOTICE` : licences et attributions. Les sources tierces conservent leurs mentions.
+## Contents
+
+- `firmware/Falcon4K_v3.1.1-OA.bin`: firmware and all-in-one automatic installer (3.1.1: an app can save a block of its own data, used by FCatch).
+- `firmware/Falcon1K_v3.1.1-OA.bin`: Falcon 1K, the same version with 1024 channels kept in its own slot's settings (F4HWN layout). In multiboot with Sonic 4K, each one keeps its own settings and channels. Falcon 4K shares its 4096 channels with Sonic 4K.
+- `Falcon apps/FGuide.app`: Falcon key reference on the radio (10 sections, in English).
+- `Falcon apps/FSystemInfo.app`: Falcon system information (firmware, memory, stack, battery, identity).
+- `Falcon apps/FCatch.app`: Close Call capture of nearby transmitters, with tone, memory channel name, VHF / UHF / VHF+UHF choice, frequency blocking (SK2) and a saved 17-entry history (Falcon 3.1.1 or later).
+- `Falcon apps/FirstAid.app`: first aid steps (ERC 2025) and CPR metronome.
+- `Falcon apps/FSurvival.app`: survival tips and SOS torch beacon.
+- `Falcon apps/FMorse.app`: Morse messages by light or radio (formerly Morse).
+- `Falcon apps/FSnake.app`: Snake game (formerly Snake F).
+- `Falcon apps/Translations`: FirstAid and FSurvival in French (FR), Spanish (ES) and Polish (PL).
+- `Falcon apps/FMessage.app` and `Falcon apps/FMessageOption.app`: messaging between radios (FMessage 3.0) and its settings ("FMessOption" in the apps list). Install both.
+- `F4WHN apps`: the 46 official F4HWN apps available (version 6.3.0), optional.
+- `chirp/falcon4k.chirp.v3.1.1.py`: Falcon 4K CHIRP driver (formerly `falcon.chirp.v3.1.0.py`), with the four priority channels, SetRxG and the REVERSE FQ, MESSAGES and FMESSAGE shortcuts.
+- `chirp/falcon1k.chirp.v3.1.1.py`: Falcon 1K CHIRP driver (memories 995 to 1024: the bands). Each driver refuses the other edition.
+- `sources/runtime`: complete firmware sources, drivers and embedded dependencies.
+- `sources/installer`: sources of the temporary installer (it reuses the drivers of `sources/runtime`).
+- `sources/fguide`, `sources/fsysteminfo`: sources of FGuide and FSystemInfo.
+- `sources/fcatch`: sources of FCatch (capture and tones derived from FSearch / GOGUFW Search, Apache-2.0).
+- `sources/firstaid`, `sources/fsurvival`, `sources/fmorse`, `sources/fsnake`: sources of FirstAid, FSurvival (with their translations), FMorse and FSnake.
+- `sources/fmessage`: sources and tests of FMessage and FMessOption.
+- `tools`, `validation/tests`, `Dockerfile`, `build-with-docker.sh`: build and tests.
+- `LICENSE`, `NOTICE`: licenses and attributions. Third-party sources keep their notices.
 
 ## Installation
 
-Utiliser UVStudio compatible avec le format v7 et les 64 emplacements Apps.
+Use a UVStudio version compatible with the v7 format and the 64 app slots.
 
-Pour conserver le firmware principal : démarrer ce firmware, ouvrir Firmware Slots dans UVStudio, écrire le BIN dans un slot libre 1 à 4, puis redémarrer en maintenant MENU pour choisir ce slot.
+To keep the main firmware: boot that firmware, open Firmware Slots in UVStudio, write the BIN to a free slot 1 to 4, then restart while holding MENU to choose that slot.
 
-Pour remplacer le firmware principal : utiliser Firmware Flash / DFU avec le même BIN.
+To replace the main firmware: use Firmware Flash / DFU with the same BIN.
 
-Au premier lancement, laisser l'écran d'installation « FALCON v3.1.1 » et « Powering Up » terminer son travail jusqu'au redémarrage automatique. Ne pas couper l'alimentation pendant l'installation ; une coupure est toutefois reprise au démarrage suivant, dans le même slot. Aucun clic « Installer les assets » n'est nécessaire.
+At first start, let the "FALCON v3.1.1" and "Powering Up" install screen finish its work until the automatic restart. Do not cut the power during the install; an interrupted install is resumed at the next start, in the same slot. No "Install assets" click is needed.
 
-Si l'écran d'installation affiche `S 04 E 10`, l'installation a été refusée sans rien effacer : la zone de Falcon contient des applications écrites par un autre firmware (emplacements Apps 80 à 99 d'un futur F4HWN). Appuyer sur PTT restaure le firmware principal.
+If the install screen shows `S 04 E 10`, the install was refused without erasing anything: the Falcon area holds apps written by another firmware (app slots 80 to 99 of a future F4HWN). Press PTT to restore the main firmware.
 
-Si Falcon affiche « MODULES MISSING / REINSTALL FALCON », ses modules en mémoire externe ont été effacés ou remplacés : réécrire le même BIN.
+If Falcon shows "MODULES MISSING / REINSTALL FALCON", its modules in external memory were erased or replaced: write the same BIN again.
 
-Les applications (celles de `Falcon apps` et de `F4WHN apps`) s'installent séparément dans l'onglet Apps d'UVStudio, au choix. Elles se lancent depuis le menu des apps (F+5) dans Falcon.
+The apps (those of `Falcon apps` and `F4WHN apps`) are installed separately from the Apps tab of UVStudio, as you choose. They start from the apps menu (F+5) in Falcon.
 
-## Organisation de la mémoire
+## Memory layout
 
-- Flash interne : le cœur du firmware.
-- Mémoire externe, par slot de firmware : les modules de code (chargés à la demande dans 4 Ko de RAM, lecture DMA et contrôle par le CRC matériel ; un module peut écrire la flash ou appeler un autre module, il est rechargé avant d'y revenir) et les ressources (polices, textes des menus). Ils occupent la zone d'assets v7 du slot (0x1CA000 + slot × 16 Ko) et une banque de 32 Ko en fin de réserve Apps v7 (0x1A2000 + slot × 32 Ko, emplacements Apps 80 à 99). Les 64 emplacements Apps, la configuration, la calibration et les canaux ne sont jamais touchés. Voir `sources/runtime/App/store_layout.h`.
-- L'écran ne reçoit que les lignes modifiées, avec une image complète au moins une fois par seconde.
+- Internal flash: the core of the firmware.
+- External memory, per firmware slot: the code modules (loaded on demand into 4 KB of RAM, DMA read and checked by the hardware CRC; a module can write the flash or call another module, and it is reloaded before returning to it) and the resources (fonts, menu texts). They use the slot's v7 asset zone (0x1CA000 + slot × 16 KB) and a 32 KB bank at the end of the v7 Apps reserve (0x1A2000 + slot × 32 KB, app slots 80 to 99). The 64 app slots, the configuration, the calibration and the channels are never touched. See `sources/runtime/App/store_layout.h`.
+- The display only receives the changed lines, with a complete frame at least once per second.
 
-## Fonctionnement de cette version
+## How this version works
 
-Full Watch (menu RX Mode « FULL WATCH ») surveille les deux VFO et jusqu'à quatre canaux prioritaires, avec un créneau de 100 ms par position. Une position est quittée plus tôt (dès 50 ms) quand deux mesures successives du niveau reçu sont nettement sous le seuil d'ouverture du squelch (6 dB de marge) ; près du seuil ou au-dessus, les 100 ms complètes sont conservées. Le Dual ordinaire garde ses 100 ms, avec une constante distincte de celle de Full Watch. F+1 à F+4 affectent ou retirent la priorité correspondante. F+EXIT ajoute ou retire le canal de la liste Monitor hors saisie active. Le centre de l'écran affiche « << F WATCH >> » (« <<F WATCH>> » quand quatre canaux à 4 chiffres l'imposent) et le bandeau supérieur affiche FW.
+Full Watch (RX Mode menu "FULL WATCH") watches both VFOs and up to four priority channels, with a 100 ms time slot per position. A position is left earlier (from 50 ms) when two successive measurements of the received level are clearly below the squelch opening threshold (6 dB margin); near or above the threshold, the full 100 ms are kept. Ordinary Dual keeps its 100 ms, with a constant separate from Full Watch's. F+1 to F+4 set or remove the matching priority. F+EXIT adds or removes the channel from the Monitor list outside an active entry. The center of the screen shows "<< F WATCH >>" ("<<F WATCH>>" when four 4-digit channels require it) and the top bar shows FW.
 
-Le Multilist Watch conserve son fonctionnement antérieur, avec ses deux priorités (sans bulles de numéros de canaux). Tous les raccourcis F+ y fonctionnent comme en VFO (F+0, F+5, F+6 à F+9, F+SK1/SK2, F+EXIT…), et la surveillance reprend une fois l'écran principal au repos. Les registres radio, les seuils de squelch et le moteur de scan sont conservés.
+Multilist Watch keeps its previous behavior, with its two priorities (without channel number bubbles). All F+ shortcuts work there as in VFO (F+0, F+5, F+6 to F+9, F+SK1/SK2, F+EXIT…), and the watch resumes once the main screen is idle. The radio registers, the squelch thresholds and the scan engine are kept.
 
-Après saisie directe d'un numéro de canal sans liste, les flèches parcourent les canaux dans l'ordre numérique depuis cette position, en sautant les emplacements vides.
+After directly entering a channel number without a list, the arrows browse the channels in numerical order from that position, skipping empty slots.
 
-Historique : l'action « HISTORY » (F1/F2 court ou long, M long) ouvre l'historique depuis le VFO, sans lancer de scan ; le titre passe dans la barre d'état et la liste gagne une ligne. Dans Spectre, Sentinel et depuis le VFO, une entrée écoutée (flèches) utilise sa propre modulation et sa largeur de bande ; appui long sur 1 : la fréquence de l'entrée passe dans le VFO principal (mode fréquence) et l'écran revient au VFO.
+History: the "HISTORY" action (F1/F2 short or long, M long) opens the history from the VFO, without starting a scan; the title moves to the status bar and the list gains a line. In Spectrum, Sentinel and from the VFO, a listened entry (arrows) uses its own modulation and bandwidth; long press on 1: the entry's frequency goes to the main VFO (frequency mode) and the screen returns to the VFO.
 
-Messages : `*` bascule entre la page HISTORY et la page MESSAGES (le scan et la réception sont arrêtés sur MESSAGES). Chaque message reçu par FMessage y est enregistré automatiquement (mémoire externe 0x012000, deux secteurs de 4 Ko, zone libre dans F4HWN v7) ; les 32 derniers sont listés « 01-AA: DEBUT », du plus récent au plus ancien, avec un numéro d'arrivée de 01 à 32 (il ne change pas après une suppression et repart à 01 après CLEAR ALL) et une ligne pointillée entre deux ouvertures de FMessage. `M` ouvre le message, `6` le supprime (DELETE ?), `6` long efface tout (CLEAR ALL ?). L'action « MESSAGES » (F1/F2, M long) ouvre l'historique directement sur cette page. Écran, lecture et suppression sont dans le module externe « messages ». Le journal RX/TX n'existe plus.
+Messages: `*` switches between the HISTORY page and the MESSAGES page (the scan and the reception are stopped on MESSAGES). Each message received by FMessage is saved there automatically (external memory 0x012000, two 4 KB sectors, a free area in F4HWN v7); the 32 latest are listed as "01-AA: START", newest first, with an arrival number from 01 to 32 (it does not change after a deletion and restarts at 01 after CLEAR ALL) and a dotted line between two FMessage sessions. `M` opens the message, `6` deletes it (DELETE?), long `6` clears everything (CLEAR ALL?). The "MESSAGES" action (F1/F2, M long) opens the history directly on this page. Screen, reading and deletion are in the external "messages" module. The RX/TX log no longer exists.
 
-FMessage : l'action « FMESSAGE » (F1/F2, M long) ouvre l'app FMessage (raccourci d'app 15) ; double bip si elle n'est pas installée.
+FMessage: the "FMESSAGE" action (F1/F2, M long) opens the FMessage app (app shortcut 15); double beep if it is not installed.
 
-REVERSE : ligne « REVERSE: » ON/OFF dans l'éditeur de canal, action « REVERSE FQ », indicateur « R » à la place du +/- ; comme F4HWN, réglage enregistré, valable aussi en mode fréquence.
+REVERSE: "REVERSE:" ON/OFF line in the channel editor, "REVERSE FQ" action, "R" indicator in place of +/-; as in F4HWN, the setting is saved and also works in frequency mode.
 
-Audio en réception aligné sur F4HWN v7 : valeurs d'origine de la puce en FM, AM et USB, menu SetRxG (porte de bruit RX, ON par défaut, forcée sur ON avec le compander RX ; octet 0x00A0C0 comme F4HWN), compander corrigé pour le BK4829. Puissances d'émission et niveau de la tonalité 1750 Hz comme F4HWN v7 ; la tonalité 1750 s'entend dans le haut-parleur.
+Received audio aligned on F4HWN v7: chip default values in FM, AM and USB, SetRxG menu (RX noise gate, ON by default, forced ON with the RX compander; byte 0x00A0C0 as in F4HWN), compander fixed for the BK4829. TX powers and 1750 Hz tone level as in F4HWN v7; the 1750 Hz tone is heard in the speaker.
 
-Sauvegarde du VFO : la fréquence et le numéro de canal sont enregistrés 3 s après le dernier changement (moins d'usure de la mémoire), et aussitôt avant une émission, le menu, un scan ou une app.
+VFO saving: the frequency and the channel number are saved 3 s after the last change (less memory wear), and immediately before a transmission, the menu, a scan or an app.
 
-Raccourcis : une touche maintenue (F1, F2, M long) ne déclenche rien d'autre après son action ; l'historique, le Spectre, la Sentinelle, les scans et FMessage ouverts par un raccourci ignorent la touche encore enfoncée jusqu'à son relâchement.
+Shortcuts: a held key (F1, F2, M long) triggers nothing else after its action; the history, Spectrum, Sentinel, scans and FMessage opened by a shortcut ignore the key still pressed until it is released.
 
-VOX : repris de F4HWN (menu VOX OFF/1 à 10, action « VOX », icône dans la barre d'état ; mêmes octets de réglage et seuils de calibration que F4HWN).
+VOX: taken from F4HWN (VOX menu OFF/1 to 10, "VOX" action, icon in the status bar; same setting bytes and calibration thresholds as F4HWN).
 
-Scanner : le Spectre, les scans VFO (F+*, appui long sur *, ML Watch) et l'historique ouvert depuis le Spectre ou le VFO déclenchent sur une montée fixe de 5 (2,5 dB) ; leur sensibilité se règle par le squelch dBm. La Sentinelle et son historique gardent leur seuil dynamique DS (touches * et F).
+Scanner: Spectrum, the VFO scans (F+*, long press on *, ML Watch) and the history opened from Spectrum or the VFO trigger on a fixed rise of 5 (2.5 dB); their sensitivity is set by the dBm squelch. Sentinel and its history keep their dynamic DS threshold (keys * and F).
 
-L'application FSystemInfo affiche la pile libre minimale mesurée depuis le démarrage.
+The FSystemInfo app shows the minimum free stack measured since start-up.
 
-64 emplacements Apps. DTMF et Live Viewer non activés.
+64 app slots. DTMF and Live Viewer not enabled.
 
-## Compilation
+## Build
 
-Avec Docker :
+With Docker:
 
 ```sh
 bash build-with-docker.sh
 ```
 
-En local : ARM GNU Toolchain 13.2.Rel1 (`arm-none-eabi-gcc` dans PATH), CMake >= 3.22, Ninja et Python 3 avec `zopfli==0.4.3`.
+Locally: ARM GNU Toolchain 13.2.Rel1 (`arm-none-eabi-gcc` in PATH), CMake >= 3.22, Ninja and Python 3 with `zopfli==0.4.3`.
 
 ```sh
 python3 -m pip install zopfli==0.4.3
 bash tools/build-local.sh
 ```
 
-Les BIN tout-en-un (Falcon 1K et Falcon 4K) sont générés dans `firmware/`. La version est lue dans `sources/runtime/CMakePresets.json` (`VERSION_STRING_2`). `sources/runtime/build/S4K/onefile-measurements.json` (et `build/S1K` pour la 1K) donne l'occupation de la flash interne et de la mémoire externe.
+The all-in-one BINs (Falcon 1K and Falcon 4K) are generated in `firmware/`. The version is read from `sources/runtime/CMakePresets.json` (`VERSION_STRING_2`). `sources/runtime/build/S4K/onefile-measurements.json` (and `build/S1K` for the 1K) gives the use of the internal flash and of the external memory.
 
-Le style du code est décrit par `sources/.clang-format`.
+The code style is described by `sources/.clang-format`.
 
-Pour reconstruire les applications Falcon :
+To rebuild the Falcon apps:
 
 ```sh
 bash sources/fguide/guide/build.sh
@@ -111,15 +113,15 @@ bash sources/fmessage/fmsgoption/build.sh
 
 ## Tests
 
-Après compilation, installer les dépendances puis lancer :
+After building, install the dependencies, then run:
 
 ```sh
 python3 -m pip install -r tools/requirements-tests.txt
 bash tools/test-local.sh
 ```
 
-Les tests ARM exécutent le firmware compilé avec des périphériques simulés ; ils ne remplacent pas l'essai sur radio. Les tests de FMessage et FMessOption sont décrits dans `sources/fmessage/README.md`.
+The ARM tests run the built firmware with simulated peripherals; they do not replace a test on the radio. The FMessage and FMessOption tests are described in `sources/fmessage/README.md`.
 
-## Intégrité
+## Integrity
 
-`SHA256SUMS` contient les empreintes des fichiers de l'archive, hors ce fichier lui-même.
+`SHA256SUMS` holds the fingerprints of the files of the archive, except this file itself.
