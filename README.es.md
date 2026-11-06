@@ -8,8 +8,9 @@ Firmware para UV-K1 / K5(v3), derivado de Sonic y compatible con F4HWN (64 slots
 - Full Watch sigue los dos VFO y hasta cuatro canales prioritarios; Multilist Watch escanea tus listas de memorias en segundo plano.
 - Escaneo directo desde el VFO: Long * escanea la lista del canal, F + * escanea todos los canales en FastScan y, con A y B en modo frecuencia, Long * escanea el rango entre ambos, manteniendo la pantalla del VFO.
 - El Espectro y Sentinel escanean listas, bandas o rangos, con un Historial de hasta 200 detecciones y listas negras.
-- Los canales, listas y bandas se crean y editan directamente desde el teclado, sin ordenador.
-- Instalación en un solo archivo, multiboot con F4HWN o Sonic, compatibilidad con las apps de F4HWN y dos ediciones: Falcon 4K (4096 canales) y Falcon 1K (1024 canales con sus propios ajustes).
+- Los canales, listas y bandas se pueden crear y editar directamente desde el teclado.
+- Apps de Falcon: FMessage envía y recibe mensajes de texto entre radios; los mensajes recibidos se guardan en la radio y se pueden leer en cualquier momento desde la página MESSAGES o el atajo FMESSAGE. FCatch (captura Close Call), FirstAid, FSurvival, FMorse, FSnake, FGuide y FSystemInfo completan las apps de F4HWN.
+- Instalación en un solo archivo, multiboot con Sonic y F4HWN (apps compatibles) y dos ediciones: Falcon 4K (4096 canales) y Falcon 1K (1024 canales con sus propios ajustes).
 
 **Guía de usuario (ES): [docs/Falcon_v3.1.1_User_Guide_ES.pdf](docs/Falcon_v3.1.1_User_Guide_ES.pdf)**. La guía de cada versión también se adjunta a las [Releases](../../releases).
 
