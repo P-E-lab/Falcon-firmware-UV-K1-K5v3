@@ -20,6 +20,8 @@ app's own settings when the name matches (APP_SlotErase).
 """
 import argparse
 import glob
+import os
+import re
 import struct
 import sys
 import time
@@ -254,8 +256,8 @@ def main():
     p.add_argument('file', nargs='?')
     p.add_argument('--port')
     p.add_argument('--slot', type=int)
-    p.add_argument('--name', default='Falcon 4K')
-    p.add_argument('--version', default='v3.0.0')
+    p.add_argument('--name', help='slot name; default from the file name: Falcon 1K or Falcon 4K')
+    p.add_argument('--version', help='slot version; default from the file name, e.g. v3.1.1')
     a = p.parse_args()
 
     radio = Radio(a.port or find_port())
@@ -275,7 +277,11 @@ def main():
     else:
         if a.slot is None or not a.file:
             p.error('write needs --slot and FILE')
-        cmd_write(radio, a.slot, a.file, a.name, a.version)
+        base = os.path.basename(a.file)
+        name = a.name or ('Falcon 1K' if base.startswith('Falcon1K') else 'Falcon 4K')
+        m = re.search(r'_v(\d+\.\d+\.\d+)', base)
+        version = a.version or ('v' + m.group(1) if m else 'v0.0.0')
+        cmd_write(radio, a.slot, a.file, name, version)
 
 
 if __name__ == '__main__':

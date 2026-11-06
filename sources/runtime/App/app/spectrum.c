@@ -419,10 +419,8 @@ static void FrequencyDraft(VFO_Info_t *draft, uint32_t f, uint8_t profile, uint1
 // CHANNEL_LOCATION
 #if defined(ENABLE_10K)
 #define MAX_SCAN_CHANNELS 10000
-#elif defined(ENABLE_4096)
+#elif defined(ENABLE_4096) || defined(ENABLE_1024)
 #define MAX_SCAN_CHANNELS (MR_CHANNELS_MAX - MAX_BANDS)
-#elif defined(ENABLE_1024)
-#define MAX_SCAN_CHANNELS 975
 #endif
 
 static bandparameters BParams[MAX_BANDS] __attribute__((section(".app_scratch"), aligned(4)));

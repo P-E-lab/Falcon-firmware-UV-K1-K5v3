@@ -12,10 +12,11 @@
 # See GPL-2.0.txt or <https://www.gnu.org/licenses/> for the full license.
 
 # Falcon CHIRP driver — navigation support added in 2.0.1-OA.
-# Load this file as a CHIRP custom module, then select Quansheng / UV-K1 / UV-K5 V3 Falcon v3.1.0.
+# Load this file as a CHIRP custom module, then select Quansheng / UV-K1 / UV-K5 V3 Falcon 1K v3.1.1.
 # Download a fresh image from the target radio before making edits.
 # Battery options follow the downloaded firmware version; EEPROM IDs stay stable.
-# Memories 4067..4096 are bands: Frequency = FSTART, Band stop (MHz) = FSTOP.
+# Falcon 1K: 1024 memories in the firmware slot's own config bank (F4HWN layout).
+# Memories 995..1024 are bands: Frequency = FSTART, Band stop (MHz) = FSTOP.
 # List names: 25 x 6 characters, in the existing 10-byte EEPROM records.
 # Application slots and firmware images are not uploaded by this driver.
 
@@ -45,14 +46,14 @@ DEBUG_SHOW_OBFUSCATED_COMMANDS = False
 # might be useful for someone debugging some obscure memory issue
 DEBUG_SHOW_MEMORY_ACTIONS = False
 
-DRIVER_VERSION = "Falcon driver: 2026/11/04 v3.1.0"
+DRIVER_VERSION = "Falcon 1K driver: 2026/11/06 v3.1.1"
 
 VALEUR_COMPILER = "ENABLE"
 
 MEM_FORMAT = """
 // -------------------- CHANNEL_LOCATION
 
-#seekto 0x122000;
+#seekto 0x000000;
 struct {
   ul32 freq;
   ul32 offset;
@@ -86,25 +87,25 @@ struct {
   u8 step;
   u8 __UNUSED03;
 
-} channel[4096];
+} channel[1024];
 
 // --------------------
 
-#seekto 0x132000;
+#seekto 0x004000;
 struct {
 char name[16];
-} channelname[4096];
+} channelname[1024];
 
 
 // --------------------
 
-#seekto 0x142000;
+#seekto 0x008000;
 struct {
   u8 __UNUSED04:3,
      compander:2,
      band:3;
   u8 scanlist;
-} ch_attr[4103];
+} ch_attr[1031];
 
 // MR_CHANNELS_LIST
 
@@ -440,9 +441,9 @@ FM_CHANNELS_MAX = 9  # Direct keypad presets; both firmware branches use these a
 FM_RADIOS_MAX = 50
 FM_RADIOS_RECORD = 17   # ul16 freq + char name[15]
 
-MR_CHANNELS_MAX = 4096 # CHANNEL_LOCATION
+MR_CHANNELS_MAX = 1024 # CHANNEL_LOCATION
 MR_CHANNELS_LIST = 26  # 25 named lists plus the existing index convention
-BAND_FIRST = 4067
+BAND_FIRST = 995
 BAND_NAME_LEN = 8
 LIST_NAME_LEN = 6
 MONITOR_ID = 51
@@ -620,8 +621,8 @@ ROGER_VALUES = [0, 10, 3, 9, 4, 6]
 RTE_LIST = ["OFF", "100ms", "200ms", "300ms", "400ms",
             "500ms", "600ms", "700ms", "800ms", "900ms", "1000ms"]
 
-MEM_SIZE =      0x144000    # size of all memory CHANNEL_LOCATION
-PROG_SIZE =     0x144001    # size of the memory that we will write (LAST ADDRESS + 1 !!!)
+MEM_SIZE =      0x010000    # size of all memory CHANNEL_LOCATION
+PROG_SIZE =     0x010001    # size of the memory that we will write (LAST ADDRESS + 1 !!!)
 MEM_BLOCK =     0x80        # largest block of memory that we can reliably write
 CAL_START =     0x00B000    # calibration memory start address
 
@@ -788,6 +789,10 @@ def _sayhello(serport):
         raise errors.RadioError("Radio is in programming mode, "
                                 "restart radio into normal mode")
     firmware = _getstring(rep, 4, 24)
+    if firmware != "FALCON 7.0/3.1K":
+        raise errors.RadioError("This driver is for Falcon 1K (3.1.1 or later). "
+                                "For Falcon 4K, select the UV-K1 / UV-K5 V3 Falcon 4K driver.")
+    firmware = "FALCON 1K 3.1.1"
     # The v7 prefix selects 64 Apps in UVStudio; present the Falcon release here.
     if firmware == "FALCON 7.0/3.1":
         firmware = "FALCON 3.1.0"
@@ -883,9 +888,9 @@ def do_download(radio):
         (0x008900, 0x00A174),
         (0x00B000, 0x00B200),
         (0x00C020, 0x00C088),
-        (0x122000, 0x122000 + (MR_CHANNELS_MAX * 16)),
-        (0x132000, 0x132000 + (MR_CHANNELS_MAX * 16)),
-        (0x142000, 0x142000 + (MR_CHANNELS_MAX * 2)),
+        (0x000000, 0x000000 + (MR_CHANNELS_MAX * 16)),
+        (0x004000, 0x004000 + (MR_CHANNELS_MAX * 16)),
+        (0x008000, 0x008000 + (MR_CHANNELS_MAX * 2)),
     ]
 
     total_bytes = sum(stop - start for start, stop in blocks_to_read)
@@ -927,9 +932,9 @@ def do_upload(radio):
     # Plages de mémoire à écrire en mode standard CHANNEL_LOCATION
     blocks_to_write = [
         (0x008900, 0x00A174),  # Configs & VFOs
-        (0x122000, 0x122000 + (MR_CHANNELS_MAX * 16)),  # Canaux
-        (0x132000, 0x132000 + (MR_CHANNELS_MAX * 16)),  # Noms
-        (0x142000, 0x142000 + (MR_CHANNELS_MAX * 2)),   # Attributs
+        (0x000000, 0x000000 + (MR_CHANNELS_MAX * 16)),  # Canaux
+        (0x004000, 0x004000 + (MR_CHANNELS_MAX * 16)),  # Noms
+        (0x008000, 0x008000 + (MR_CHANNELS_MAX * 2)),   # Attributs
     ]
 
     if radio.upload_listenbw:
@@ -1013,11 +1018,11 @@ def list_def(value, lst, default):
 class UVK5RadioEgzumer(chirp_common.CloneModeRadio):
     """Quansheng UV-K1 running Falcon firmware."""
     VENDOR = "Quansheng"
-    MODEL = "UV-K1 / UV-K5 V3 Falcon v3.1.0"
+    MODEL = "UV-K1 / UV-K5 V3 Falcon 1K v3.1.1"
     BAUD_RATE = 38400
     NEEDS_COMPAT_SERIAL = False
     FIRMWARE_VERSION = ""
-    MEM_SIZE =      0x144001    # size of all memory CHANNEL_LOCATION
+    MEM_SIZE =      0x010001    # size of all memory CHANNEL_LOCATION
 
 # this change to send power level chan in the calibration but under macos it give error
 # bugfix calibration : put in comment next line: upload_calibration = False
@@ -1042,7 +1047,7 @@ class UVK5RadioEgzumer(chirp_common.CloneModeRadio):
         return self.FIRMWARE_VERSION
 
     def _supports_navigation(self):
-        return any(v in self._version_string() for v in ("2.0.1", "2.2.0", "2.2.1", "2.3.0", "2.3.1", "3.0.0", "3.1.0", "1.2.1-SE", "1.3.0"))
+        return any(v in self._version_string() for v in ("2.0.1", "2.2.0", "2.2.1", "2.3.0", "2.3.1", "3.0.0", "3.1.0", "3.1.1", "1.2.1-SE", "1.3.0"))
 
     def _is_legacy_battery(self):
         return "1.1.6" in self._version_string()
@@ -1882,7 +1887,7 @@ class UVK5RadioEgzumer(chirp_common.CloneModeRadio):
     def get_settings(self):
         _mem = self._memobj
 
-        ValFirm = "Firmware : Falcon v3.1.0"
+        ValFirm = "Firmware : Falcon 1K v3.1.1"
 
   
         radio_firmware = RadioSettingGroup("radio_firmwarebasic", ValFirm)

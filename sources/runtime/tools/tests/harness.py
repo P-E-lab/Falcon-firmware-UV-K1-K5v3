@@ -16,6 +16,11 @@ from unicorn.arm_const import *
 
 ROOT = Path(__file__).resolve().parents[2]
 B = Path(os.environ.get('FALCON_TEST_BUILD', str(ROOT / 'build/S4K')))
+# Edition of the build under test: Falcon 1K (S1K) keeps 1024 channels in the
+# config bank, Falcon 4K (S4K) 4096 in the Sonic 4K reserve.
+K1 = B.name == 'S1K'
+MR_MAX = 1024 if K1 else 4096
+CH_BASE, NAME_BASE = (0x000000, 0x004000) if K1 else (0x1DE000, 0x1EE000)
 fw = (B / 'falcon.data.bin').read_bytes()
 elf = ELFFile(open(B / 'falcon.data.elf', 'rb'))
 _symtab = list(elf.get_section_by_name('.symtab').iter_symbols())

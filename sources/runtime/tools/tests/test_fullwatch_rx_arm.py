@@ -13,7 +13,7 @@ stub('BK4819_ReadRegister',read)
 flash[0x10000:0x10100]=bytes([40])*256
 for i,ch in enumerate([10,11,50,51,52,53]):
  attrs[ch]=0
- struct.pack_into('<IIBBBBBBBB',flash,0x1de000+ch*16,14500000+ch*2500,0,0,0,0,0,0,0,8,0)
+ struct.pack_into('<IIBBBBBBBB',flash,CH_BASE+ch*16,14500000+ch*2500,0,0,0,0,0,0,0,8,0)
  if i<2:
   call('RADIO_InitInfo',eep+vfooff+i*vfosize,ch,14500000+ch*2500)
   call('RADIO_LoadChannel',eep+vfooff+i*vfosize,ch,0,2)

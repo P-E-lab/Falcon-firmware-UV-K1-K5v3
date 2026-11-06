@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build the external store and the one-file installer payload.
 
-Inputs : the runtime ELF/BIN (sources/runtime/build/S4K).
+Inputs : the runtime ELF/BIN (sources/runtime/build/<preset>, S4K by default).
 Outputs: sources/installer/App/install_payload.c (compressed runtime + store),
          build/S4K/store.raw, runtime.raw and onefile-measurements.json.
 
@@ -131,10 +131,11 @@ def main():
     p.add_argument('installer', type=Path)
     p.add_argument('--objcopy', default='arm-none-eabi-objcopy')
     p.add_argument('--name', default='falcon.data')
+    p.add_argument('--preset', default='S4K', help='runtime build preset: S4K or S1K')
     a = p.parse_args()
 
     c = layout_constants(a.runtime / 'App/store_layout.h')
-    build = a.runtime / 'build/S4K'
+    build = a.runtime / 'build' / a.preset
     elf = build / (a.name + '.elf')
     firmware = (build / (a.name + '.bin')).read_bytes()
     assert len(firmware) % 4 == 0 and len(firmware) <= INTERNAL_FLASH

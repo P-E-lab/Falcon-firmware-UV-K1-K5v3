@@ -4,7 +4,7 @@ reads it; the channel numbers wait too. SETTINGS_SaveVfoNow (PTT, menu,
 scanners, apps, UART) and the end of the 3 s countdown write both."""
 from harness import *
 
-FREQ_CHANNEL = 4096  # S4K: MR_CHANNELS_MAX
+FREQ_CHANNEL = MR_MAX  # MR_CHANNELS_MAX
 writes = []
 
 

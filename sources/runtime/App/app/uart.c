@@ -246,6 +246,14 @@ static void SendReply(uint32_t Port, void *pReply, uint16_t Size)
 #endif
 }
 
+/* Falcon 1K answers "3.1K": its channels are not at the 4K driver's
+ * addresses, so each CHIRP driver accepts only its own edition. */
+#ifdef ENABLE_1024
+#define FALCON_HELLO "FALCON 7.0/3.1K"
+#else
+#define FALCON_HELLO "FALCON 7.0/3.1"
+#endif
+
 static void SendVersion(uint32_t Port)
 {
     REPLY_0514_t Reply;
@@ -255,8 +263,8 @@ static void SendVersion(uint32_t Port)
     /* UVStudio chooses 16/48/64 app slots from the first numeric version,
      * not a capability query. Announce the 64-slot, API-3 app protocol here;
      * Version, boot display, module metadata and EEPROM retain Falcon identity. */
-    _Static_assert(sizeof("FALCON 7.0/3.1") <= sizeof(Reply.Data.Version), "device identity");
-    strcpy(Reply.Data.Version, "FALCON 7.0/3.1");
+    _Static_assert(sizeof(FALCON_HELLO) <= sizeof(Reply.Data.Version), "device identity");
+    strcpy(Reply.Data.Version, FALCON_HELLO);
     Reply.Data.bHasCustomAesKey = bHasCustomAesKey;
     Reply.Data.bIsInLockScreen = bIsInLockScreen;
     Reply.Data.Challenge[0] = gChallenge[0];
@@ -361,8 +369,10 @@ static void CMD_051B(uint32_t Port, const uint8_t *pBuffer)
 
     if (!bLocked) {
         uint32_t addr = pCmd->Offset;
+#ifdef ENABLE_4096
         if (addr >= 0x122000u && addr < 0x144000u)
             addr += ADRESS_CHANNELS - 0x122000u;
+#endif
 
         // Translation directe pour la plage de calibration
         if (addr >= CALIB_EEPROM_START && addr < (CALIB_EEPROM_START + CALIB_SIZE)) {
@@ -375,6 +385,14 @@ static void CMD_051B(uint32_t Port, const uint8_t *pBuffer)
     if (PY25Q16_IsHealthy())
         SendReply(Port, &Reply, pCmd->Size + 10);
 }
+
+/* CHIRP's 4K channel window 0x122000..0x143FFF maps to ADRESS_CHANNELS.
+ * Falcon 1K has none: its channels are in the config bank, below 0x10000. */
+#ifdef ENABLE_4096
+#define CHIRP_CHANNEL_WINDOW 1
+#else
+#define CHIRP_CHANNEL_WINDOW 0
+#endif
 
 // write eeprom
 static void CMD_051D(uint32_t Port, const uint8_t *pBuffer)
@@ -412,7 +430,8 @@ static void CMD_051D(uint32_t Port, const uint8_t *pBuffer)
     if (!((offset < 0x10000u && pCmd->Size <= 0x10000u - offset) ||
           (offset >= LOGO_FLASH_START && offset < LOGO_FLASH_START + LOGO_SIZE &&
            pCmd->Size <= LOGO_FLASH_START + LOGO_SIZE - offset) ||
-          (offset >= 0x122000u && offset < 0x144000u && pCmd->Size <= 0x144000u - offset)))
+          (CHIRP_CHANNEL_WINDOW && offset >= 0x122000u && offset < 0x144000u &&
+           pCmd->Size <= 0x144000u - offset)))
         return;
     gSerialConfigCountDown_500ms = 12; // 6 sec
 
@@ -438,8 +457,10 @@ static void CMD_051D(uint32_t Port, const uint8_t *pBuffer)
 
             if ((Offset < 0x0E98 || Offset >= 0x0EA0) || !bIsInLockScreen || pCmd->bAllowPassword) {
                 uint32_t addr = Offset;
+#ifdef ENABLE_4096
                 if (addr >= 0x122000u && addr < 0x144000u)
                     addr += ADRESS_CHANNELS - 0x122000u;
+#endif
 
                 // Translation directe pour la plage de calibration
                 if (addr >= CALIB_EEPROM_START && addr < (CALIB_EEPROM_START + CALIB_SIZE)) {

@@ -4,7 +4,7 @@ import struct,ast
 from harness import *
 get8=lambda n:u.mem_read(addr(n),1)[0]
 freqs={};tunes=[]
-for ch in range(4096):struct.pack_into('<I',flash,0x1DE000+ch*16,14500000+ch*2500)
+for ch in range(MR_MAX):struct.pack_into('<I',flash,CH_BASE+ch*16,14500000+ch*2500)
 stub('SETTINGS_FetchChannelFrequency',lambda ch,*a:ret(freqs.get(ch,14500000+ch*2500)))
 stub('RADIO_LoadChannel',lambda *a:ret())
 for n in ['RADIO_SetupRegisters','RADIO_ConfigureChannel','RADIO_SelectVfos','SETTINGS_SaveVfoIndices','ST7565_BlitFullScreen','SYSTEM_DelayMs','GPIO_DisableAudioPath','GPIO_EnableAudioPath','BK4819_WriteRegister','BK4819_ToggleGpioOut','BACKLIGHT_TurnOn','BACKLIGHT_Update','BEEP_Play']:
@@ -16,7 +16,7 @@ for n in ['gTxVfo','gRxVfo','gCurrentVfo']:put32(addr(n),eep+vfooff)
 put8(eep+txindex,0);put8(eep+rxmode,2);put8(addr('gScreenToDisplay'),0);put32(addr('gCurrentFunction'),0)
 for ch in [50,51,52,53]:attrs[ch]=0
 for count in range(5):
- for i in range(4):put16(eep+prio+2*i,50+i if i<count else 4096)
+ for i in range(4):put16(eep+prio+2*i,50+i if i<count else MR_MAX)
  call('APP_FullWatchReset');call('FullWatchInitialize')
  assert get8('gFullWatchBackgroundCount')==count
  seen=[]
@@ -26,7 +26,7 @@ for count in range(5):
  assert sorted(seen)==sorted([10,11]+list(range(50,50+count))),seen
 print('PASS actual 100-ms cycle: A/B plus zero to four priorities, each visited once')
 # Priorities already displayed remain valid; duplicate priority slots are ignored.
-for vals,want in [([10,11,52,53],4),([50,50,52,52],2),([4096]*4,0)]:
+for vals,want in [([10,11,52,53],4),([50,50,52,52],2),([MR_MAX]*4,0)]:
  for i,ch in enumerate(vals):put16(eep+prio+2*i,ch)
  call('APP_FullWatchReset');call('FullWatchInitialize');assert get8('gFullWatchBackgroundCount')==want
 # The mode action must enter OW while still in Dual (initialization precedes mode change).
@@ -38,11 +38,11 @@ print('PASS mode selection from Dual; assigned A/B priorities and duplicate reje
 # F+1..4 use the same native setter and toggle the same saved values.
 put16(eep+vfooff+save,10);put32(addr('gTxVfo'),eep+vfooff)
 for i in range(4):
- for j in range(4):put16(eep+prio+j*2,4096)
+ for j in range(4):put16(eep+prio+j*2,MR_MAX)
  put8(addr('gWasFKeyPressed'),1);call('MAIN_ProcessKeys',i+1,0,0)
  assert struct.unpack('<H',u.mem_read(eep+prio+i*2,2))[0]==10
  put8(addr('gWasFKeyPressed'),1);call('MAIN_ProcessKeys',i+1,0,0)
- assert struct.unpack('<H',u.mem_read(eep+prio+i*2,2))[0]==4096
+ assert struct.unpack('<H',u.mem_read(eep+prio+i*2,2))[0]==MR_MAX
  assert not get8('native_depth')
 print('PASS F+1/F+2/F+3/F+4 toggle corresponding priority and return before deferred saves')
 # Actual four-bubble layout, including four-digit IDs and mixed widths.
@@ -53,7 +53,8 @@ def bubble(p,x,line,status):
  # Fifth/sixth arguments are at SP / SP+4.
  bubbles.append((text,x-2,end));ret()
 stub('GUI_DisplaySmallest',label);stub('GUI_DisplaySmallestInverse',bubble)
-for vals in [[50,51,52,53],[1000,2000,3000,4000],[50,1000,52,4000]]:
+# Falcon 1K has no four-digit priority (its last user channel is 994).
+for vals in [[50,51,52,53]]+([[990,991,992,993],[50,990,52,993]] if K1 else [[1000,2000,3000,4000],[50,1000,52,4000]]):
  for ch in vals:attrs[ch]=0
  for i,ch in enumerate(vals):put16(eep+prio+2*i,ch)
  call('APP_FullWatchReset');call('FullWatchInitialize');labels.clear();bubbles.clear()
@@ -118,5 +119,5 @@ print('PASS PRICH1..4 menu values, existing save path, and all four restored aft
 
 flash[0xA170:0xA174]=struct.pack('<2H',52,53)
 call('SETTINGS_InitEEPROM',count=6000000)
-assert bytes(u.mem_read(eep+prio+4,4))==struct.pack('<2H',4096,4096)
+assert bytes(u.mem_read(eep+prio+4,4))==struct.pack('<2H',MR_MAX,MR_MAX)
 print('PASS untagged legacy bytes do not enable phantom priorities 3/4')

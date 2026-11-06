@@ -7,6 +7,7 @@ Firmware pour UV-K1 / Sonic 4K, dérivé de Sonic et compatible avec les applica
 ## Contenu
 
 - `firmware/Falcon4K_v3.1.1-OA.bin` : firmware et installateur automatique tout-en-un (3.1.1 : une app peut sauvegarder un bloc de ses propres données, utilisé par FCatch).
+- `firmware/Falcon1K_v3.1.1-OA.bin` : Falcon 1K, la même version avec 1024 canaux rangés dans les réglages propres à son slot (format F4HWN). En multiboot avec Sonic 4K, chacun garde ses réglages et ses canaux. La Falcon 4K, elle, partage ses 4096 canaux avec Sonic 4K.
 - `Falcon apps/FGuide.app` : mémo des touches de Falcon sur la radio (10 rubriques, en anglais).
 - `Falcon apps/FSystemInfo.app` : informations système de Falcon (firmware, mémoire, pile, batterie, identité).
 - `Falcon apps/FCatch.app` : capture des émetteurs proches (Close Call) avec tonalité, nom du canal mémoire, choix VHF / UHF / VHF+UHF, blocage des fréquences (SK2) et historique de 17 entrées sauvegardé (Falcon 3.1.1 ou plus).
@@ -17,7 +18,8 @@ Firmware pour UV-K1 / Sonic 4K, dérivé de Sonic et compatible avec les applica
 - `Falcon apps/Translations` : FirstAid et FSurvival en français (FR), espagnol (ES) et polonais (PL).
 - `Falcon apps/FMessage.app` et `Falcon apps/FMessageOption.app` : messagerie entre radios (FMessage 3.0) et ses réglages (« FMessOption » dans la liste des apps). Les installer ensemble.
 - `F4WHN apps` : les 46 applications officielles F4HWN disponibles (version 6.3.0), optionnelles.
-- `chirp/falcon.chirp.v3.1.0.py` : pilote CHIRP avec les quatre canaux prioritaires, SetRxG et les raccourcis REVERSE FQ, MESSAGES et FMESSAGE.
+- `chirp/falcon4k.chirp.v3.1.1.py` : pilote CHIRP de la Falcon 4K (anciennement `falcon.chirp.v3.1.0.py`), avec les quatre canaux prioritaires, SetRxG et les raccourcis REVERSE FQ, MESSAGES et FMESSAGE.
+- `chirp/falcon1k.chirp.v3.1.1.py` : pilote CHIRP de la Falcon 1K (mémoires 995 à 1024 : les bandes). Chaque pilote refuse l'autre édition.
 - `sources/runtime` : sources complètes du firmware, pilotes et dépendances embarquées.
 - `sources/installer` : sources de l'installateur temporaire (il réutilise les pilotes de `sources/runtime`).
 - `sources/fguide`, `sources/fsysteminfo` : sources de FGuide et FSystemInfo.
@@ -94,7 +96,7 @@ python3 -m pip install zopfli==0.4.3
 bash tools/build-local.sh
 ```
 
-Le BIN tout-en-un est généré dans `firmware/`. La version est lue dans `sources/runtime/CMakePresets.json` (`VERSION_STRING_2`). `sources/runtime/build/S4K/onefile-measurements.json` donne l'occupation de la flash interne et de la mémoire externe.
+Les BIN tout-en-un (Falcon 1K et Falcon 4K) sont générés dans `firmware/`. La version est lue dans `sources/runtime/CMakePresets.json` (`VERSION_STRING_2`). `sources/runtime/build/S4K/onefile-measurements.json` (et `build/S1K` pour la 1K) donne l'occupation de la flash interne et de la mémoire externe.
 
 Le style du code est décrit par `sources/.clang-format`.
 

@@ -82,12 +82,26 @@
         "ENABLE_4096": true,
         "EDITION_STRING": "Falcon 4K"
       }
+    },
+    {
+      "name": "S1K",
+      "inherits": "default",
+      "cacheVariables": {
+        "ENABLE_USB": true,
+        "ENABLE_UART": true,
+        "EDITION_STRING": "Falcon 1K",
+        "ENABLE_1024": true
+      }
     }
   ],
   "buildPresets": [
     {
       "name": "S4K",
       "configurePreset": "S4K"
+    },
+    {
+      "name": "S1K",
+      "configurePreset": "S1K"
     }
   ]
 }
