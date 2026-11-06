@@ -2,7 +2,7 @@
 
 **English** | [Français](README.fr.md)
 
-Firmware for the UV-K1 / Sonic 4K, derived from Sonic and compatible with the F4HWN v7 apps (64 app slots).
+Firmware for UV-K1 / K5(v3), derived from Sonic and compatible with the F4HWN v7 apps (64 app slots).
 
 **User guide (EN): [docs/Falcon_v3.1.1_User_Guide_EN.pdf](docs/Falcon_v3.1.1_User_Guide_EN.pdf)**. The guide of each version is also attached to the [Releases](../../releases).
 
