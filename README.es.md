@@ -12,6 +12,8 @@ Firmware para UV-K1 / K5(v3), derivado de Sonic y compatible con F4HWN (64 slots
 - Apps de Falcon: FMessage envía y recibe mensajes de texto de 64 caracteres en FSK entre radios; los mensajes se guardan en la radio, accesibles desde el VFO (atajo MESSAGES) o con la app FMessage (también con atajo desde el VFO). Envía una llamada con una melodía y muestra las radios presentes con la app abierta (melodía e indicativo ajustados en FMessageOption); cada radio que ha confirmado la recepción del último mensaje se marca con un +. FCatch (captura Close Call) para señales VHF y UHF, FirstAid, FSurvival y FMorse para situaciones de emergencia, FGuide (guía de teclas y atajos del firmware), FSystemInfo y FSnake (paredes abiertas, teclas 3/7 para ambos sentidos) completan el catálogo de F4HWN.
 - Instalación en un solo archivo, multiboot con Sonic y F4HWN (apps compatibles) y dos ediciones: Falcon 4K (4096 canales) y Falcon 1K (1024 canales con sus propios ajustes).
 
+El firmware Falcon está programado con Claude Code.
+
 **Guía de usuario (ES): [docs/Falcon_v3.1.1_User_Guide_ES.pdf](docs/Falcon_v3.1.1_User_Guide_ES.pdf)**. La guía de cada versión también se adjunta a las [Releases](../../releases).
 
 ## Contenido
@@ -133,5 +135,3 @@ Las pruebas ARM ejecutan el firmware compilado con periféricos simulados; no su
 ## Integridad
 
 `SHA256SUMS` contiene las huellas de los archivos del archivo, salvo este mismo archivo.
-
-El firmware Falcon está programado con Claude Code.
