@@ -1,6 +1,6 @@
 # Falcon 4K v3.1.1-OA
 
-**English** | [Français](README.fr.md)
+**English** | [Français](README.fr.md) | [Español](README.es.md)
 
 Firmware for UV-K1 / K5(v3), derived from Sonic and compatible with the F4HWN v7 apps (64 app slots).
 
