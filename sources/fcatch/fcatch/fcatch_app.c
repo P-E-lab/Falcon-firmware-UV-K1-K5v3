@@ -334,7 +334,7 @@ static void draw_live(void)
             p = str(s, "LAST: "); freq_text(p, HF[0]); line(s, 3, true);
         } else line("NO CAPTURE YET", 3, true);
     }
-    footer("MENU:BAND 9:HIST SK2:BLK", "0:MUTE"); /* EXIT still quits; MUTE state is in the status line */
+    footer("MENU:BAND 9:HIST SK2:BLK", "0:MUTE"); /* EXIT goes back to the Apps menu; MUTE state is in the status line */
 }
 
 /* Save one history entry to the VFO or a new memory, committed when the app exits. */
