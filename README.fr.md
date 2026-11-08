@@ -2,7 +2,7 @@
 
 [English](README.md) | **Français** | [Español](README.es.md)
 
-Firmware pour UV-K1 / K5(v3), dérivé de Sonic et compatible avec F4HWN (64 emplacements Apps).
+Firmware pour UV-K1 / K5(v3), dérivé de [Sonic](https://github.com/Robby69400/Sonic) et compatible avec [F4HWN](https://github.com/armel/uv-k1-k5v3-firmware-custom) (64 emplacements Apps).
 
 - Écrans clairs, aide Keys Infos sur F (#), et deux vitesses de scan : Normal pour une détection fiable (~300 canaux/s) et FastScan pour balayer rapidement beaucoup de canaux (~500 canaux/s).
 - Full Watch suit les deux VFO et jusqu'à quatre canaux prioritaires ; Multilist Watch scanne vos listes mémoire en arrière-plan.
