@@ -21,6 +21,7 @@
 
 void MAIN_ProcessKeys(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld);
 void channelMoveSwitch(void);
+void MAIN_SetMemoryStep(uint16_t channel, bool none);
 void MAIN_FrequencyToVfo(void);
 int16_t CHANNEL_SaveHistoryFrequency(uint32_t frequency, uint8_t modulation, uint8_t narrow, uint16_t css);
 

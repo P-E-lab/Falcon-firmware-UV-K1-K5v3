@@ -363,6 +363,7 @@ const t_sidefunction gSubMenu_SIDEFUNCTIONS[] = {
     {"VOX", ACTION_OPT_VOX},
 #endif
     {"REVERSE FQ", ACTION_OPT_REVERSE},
+    {"BAND SCAN", ACTION_OPT_BAND_SCAN},
     {"VFO A/B", ACTION_OPT_VFO_AB}, // last: not offered to M Long
 };
 

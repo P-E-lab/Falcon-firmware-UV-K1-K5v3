@@ -576,6 +576,84 @@ void UI_DrawIdentityBubble(const char *text, uint8_t left, uint8_t top, uint8_t 
     }
 }
 
+// List of a memory on the VFO screen: its number and initials, or NONE, MONI
+// (monitor) and BAND against the right edge, without a pill.
+static __attribute__((noinline)) void UI_DrawMemoryList(uint16_t channel, uint8_t line)
+{
+    const ChannelAttributes_t *att = MR_GetChannelAttributes(channel);
+    if (!att)
+        return;
+    const uint8_t y = line * 8 + 1;
+    const char *word = NULL;
+    if (channel >= MR_CHANNELS_MAX - MAX_BANDS)
+        word = "BAND";
+    else if (att->scanlist >= 1 && att->scanlist <= MR_CHANNELS_LIST) {
+        char number[4];
+        sprintf(number, "%02u", att->scanlist);
+        UI_DrawText5x5(number, 109, y, 2);
+        UI_DrawScanListBubble(att->scanlist, line * 8 + 8);
+    } else if (att->scanlist == 51)
+        word = "MONI";
+    else if (!att->scanlist)
+        word = "NONE";
+    if (word)
+        UI_DrawText5x5(word, 128 - 23, y, 4);
+}
+
+// BAND SCAN: the band's first three letters where a memory shows its list
+// initials, without the pill.
+static __attribute__((noinline)) void UI_DrawBandInitials(uint8_t vfo, uint8_t line)
+{
+    const char *band = APP_GetScanningVfo() == vfo ? APP_ScanBandName() : NULL;
+    if (!band)
+        return;
+    const unsigned n = strlen(band) < 3 ? strlen(band) : 3;
+    UI_DrawText5x5(band, 104 + (21 - (n * 6 - 1)) / 2, line * 8 + 9, n);
+}
+
+// Frequency mode: the name of the first memory on the VFO frequency, or
+// "CH-0012" when it has none; false without a memory. The memories are
+// searched once per frequency (and after a flash write); while this VFO is
+// scanned, only when the scan stops on a signal. BAND SCAN shows its band
+// name instead of VFO A/B.
+static __attribute__((noinline)) bool UI_VfoMemoryName(char *title, uint8_t vfo, uint32_t frequency, uint8_t line)
+{
+    UI_DrawBandInitials(vfo, line);
+    static uint32_t seen[2];
+    static uint16_t found[2];
+    static uint8_t writes[2];
+    const bool scanned = APP_GetScanningVfo() == vfo;
+    const char *band = scanned ? APP_ScanBandName() : NULL;
+    if (scanned && !APP_VfoScanListening()) {
+        // While it scans: BAND SCAN keeps its last reception, else its band.
+        frequency = band ? APP_ScanLastRx() : 0;
+        if (!frequency) {
+            if (!band)
+                return false;
+            strcpy(title, band);
+            return true;
+        }
+    }
+    if (seen[vfo] != frequency || writes[vfo] != gFlashWrites) {
+        seen[vfo] = frequency;
+        writes[vfo] = gFlashWrites;
+        found[vfo] = APP_MemoryOnFrequency(frequency);
+    }
+    const uint16_t channel = found[vfo];
+    if (!IS_MR_CHANNEL(channel)) {
+        if (!band)
+            return false;
+        // BAND SCAN: the frequency of its reception, kept until the next one.
+        sprintf(title, "%u.%05u", (unsigned)(frequency / 100000), (unsigned)(frequency % 100000));
+        return true;
+    }
+    SETTINGS_FetchChannelName(title, channel);
+    if (!title[0])
+        sprintf(title, "CH-%04u", channel + 1);
+    title[8] = '\0';
+    return true;
+}
+
 // The same initials, font and pill geometry in Single and Dual VFO.
 void UI_DrawScanListBubble(uint8_t list, uint8_t top)
 {
@@ -656,11 +734,43 @@ static void UI_DrawSingleModulation(const VFO_Info_t *vfo)
         UI_PrintSingleValueCentered(gModulationStr[vfo->Modulation], 115, 48);
 }
 
+uint8_t gUiScanPartial;
+
+// Single VFO, frequency mode: the memory name, or VFO, raised one pixel like
+// the memory number (outside the vfo module, which is full).
+static __attribute__((noinline)) void UI_DrawSingleVfoTitle(uint8_t vfo, bool inputting)
+{
+    char name[22];
+    if (inputting || !UI_VfoMemoryName(name, vfo, gEeprom.VfoInfo[vfo].pRX->Frequency, 0))
+        strcpy(name, "VFO");
+    UI_PrintStringSmallNormal(name, 2, 0, 0);
+    const unsigned end = 3 + strlen(name) * 7; // the name's ink only
+    for (unsigned x = 2; x < (end > 38 ? end : 38); ++x)
+        gFrameBuffer[0][x] <<= 1;
+}
+
+// A partial scan frame clears, then sends, its pages alone (outside the vfo
+// module, which is full).
+static __attribute__((noinline)) void UI_ScanPages(uint8_t first, uint8_t count, bool send)
+{
+    if (!send)
+        memset(gFrameBuffer[first], 0, count * sizeof gFrameBuffer[0]);
+    else
+        while (count--)
+            ST7565_BlitLine(first++);
+}
+
 static void UI_DisplayMainDual(void)
 {
     char String[32];
     center_line = CENTER_LINE_NONE;
-    UI_DisplayClear();
+    const uint8_t only = gUiScanPartial ? APP_GetScanningVfo() : UINT8_MAX;
+    // Title and frequency, plus the parameters for a memory scan.
+    const uint8_t pages = gUiScanPartial == UI_SCAN_FREQUENCY ? 2 : 3;
+    if (only < 2)
+        UI_ScanPages(only * 4, pages, false);
+    else
+        UI_DisplayClear();
 
     if (gLowBattery && !gLowBatteryConfirmed) {
         UI_DisplayPopup("LOW BATTERY");
@@ -691,6 +801,8 @@ static void UI_DisplayMainDual(void)
     }
 
     for (unsigned int vfo = 0; vfo < 2; vfo++) {
+        if (only < 2 && vfo != only)
+            continue;
         const uint8_t line = (vfo == 0) ? 0 : 4;
         const VFO_Info_t *info = APP_GetFullWatchDisplayVfo(vfo);
         const uint16_t channel = info ? info->CHANNEL_SAVE : gEeprom.ScreenChannel[vfo];
@@ -710,7 +822,7 @@ static void UI_DisplayMainDual(void)
             SETTINGS_FetchChannelName(title, channel);
             if (title[0] == '\0')
                 sprintf(title, "CH-%04u", channel + 1);
-        } else {
+        } else if (!UI_VfoMemoryName(title, vfo, info->pRX->Frequency, line)) {
             sprintf(title, "VFO %c", vfo == 0 ? 'A' : 'B');
         }
         // Reserve the right-hand memory/list block without overlapping names.
@@ -776,6 +888,8 @@ static void UI_DisplayMainDual(void)
         const char *display =
             VfoState[vfo] == VFO_STATE_TX_DISABLE ? VfoStateStr[VFO_STATE_TX_DISABLE] : frequencyText;
         UI_PrintStringSmallNormal(display, 32, 0, line + 1);
+        if (only < 2 && gUiScanPartial == UI_SCAN_FREQUENCY)
+            continue;
         /* Align to the actual ink, including leading spaces below 100 MHz
          * and the small font's inset on digit 1. */
         const uint8_t frequencyFirstX = 33;
@@ -795,13 +909,7 @@ static void UI_DisplayMainDual(void)
             const uint8_t width = strlen(memNo) * 6 + 3;
             memoryBubbleEnd = 3 + width;
             UI_DrawIdentityBubble(memNo, 3, line * 8 + 8, width);
-            const ChannelAttributes_t *att = MR_GetChannelAttributes(channel);
-            if (att && att->scanlist > 0 && att->scanlist <= MR_CHANNELS_LIST) {
-                char number[4];
-                sprintf(number, "%02u", att->scanlist);
-                UI_DrawText5x5(number, 109, line * 8 + 1, 2);
-                UI_DrawScanListBubble(att->scanlist, line * 8 + 8);
-            }
+            UI_DrawMemoryList(channel, line);
         }
 
         /* Keep modulation centred under the three scanlist initials. */
@@ -882,6 +990,10 @@ static void UI_DisplayMainDual(void)
         }
     }
 
+    if (only < 2) {
+        UI_ScanPages(only * 4, pages, true);
+        return;
+    }
     UI_DrawCenterLine();
     UI_MAIN_DrawFullWatchPriorities();
     if (gScreenToDisplay != DISPLAY_CHANNEL)
@@ -898,8 +1010,12 @@ NATIVE_CODE(vfo) void UI_DisplayMainNative(void)
 
     center_line = CENTER_LINE_NONE; // Center line initially available
 
-    // Clear screen and prepare frame buffer
-    UI_DisplayClear();
+    // Clear screen and prepare frame buffer; a frequency scan only pages 0-4.
+    const bool frequencyOnly = gUiScanPartial == UI_SCAN_FREQUENCY;
+    if (frequencyOnly)
+        UI_ScanPages(0, 5, false);
+    else
+        UI_DisplayClear();
 
     // ================================================================
     // CHECK FOR LOW BATTERY ALERT
@@ -949,13 +1065,7 @@ NATIVE_CODE(vfo) void UI_DisplayMainNative(void)
         UI_PrintStringSmallNormal(String, 2, 0, 0);
         for (unsigned x = 2; x < 38; ++x)
             gFrameBuffer[0][x] <<= 1;
-        const ChannelAttributes_t *att = MR_GetChannelAttributes(channel);
-        if (att && att->scanlist && att->scanlist <= MR_CHANNELS_LIST) {
-            char number[4];
-            snprintf(number, sizeof number, "%02u", att->scanlist);
-            UI_DrawText5x5(number, 109, 1, 2);
-            UI_DrawScanListBubble(att->scanlist, 8);
-        }
+        UI_DrawMemoryList(channel, 0);
         if (!inputting) {
             char name[22];
             SETTINGS_FetchChannelName(name, channel);
@@ -973,11 +1083,8 @@ NATIVE_CODE(vfo) void UI_DisplayMainNative(void)
                 gFrameBuffer[2][x] = ink >> 15;
             }
         }
-    } else {
-        UI_PrintStringSmallNormal("VFO", 2, 0, 0);
-        for (unsigned x = 2; x < 38; ++x)
-            gFrameBuffer[0][x] <<= 1;
-    }
+    } else
+        UI_DrawSingleVfoTitle(vfo_num, inputting);
 
     // Both Single modes share the memory frequency's raised y position.
     if (INPUTBOX_FrequencyIsActive())
@@ -1003,6 +1110,10 @@ NATIVE_CODE(vfo) void UI_DisplayMainNative(void)
         gFrameBuffer[2][x] |= ink >> 1;
         gFrameBuffer[3][x] = ink >> 9;
         gFrameBuffer[4][x] = 0;
+    }
+    if (frequencyOnly) {
+        UI_ScanPages(0, 4, true);
+        return;
     }
     if (gSetting_set_ptt_session)
         UI_PrintStringSmallBold("T", LCD_WIDTH + 4, 0, 3);

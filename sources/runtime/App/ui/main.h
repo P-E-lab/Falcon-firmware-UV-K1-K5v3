@@ -53,6 +53,10 @@ void UI_DisplayAudioScope(void);
 #endif
 void UI_MAIN_TimeSlice500ms(void);
 void UI_DisplayMain(void);
+/* While a VFO scan scans: 0 the whole screen, 1 the scanned VFO's block (dual
+ * VFO), 2 its title and frequency only (frequency and band scans). */
+enum { UI_SCAN_FULL, UI_SCAN_BLOCK, UI_SCAN_FREQUENCY };
+extern uint8_t gUiScanPartial;
 void UI_DrawMenuEdition(void);
 
 #ifdef ENABLE_AGC_SHOW_DATA

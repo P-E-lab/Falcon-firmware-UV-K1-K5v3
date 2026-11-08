@@ -43,4 +43,24 @@ assert triggers(1, 0, 1, 20, 8)
 assert triggers(0, 0, 0, 50, 8)
 # Sentinel keeps DS: rise 8 blocked at DS 20, accepted at DS 5.
 assert not triggers(1, 0, 0, 20, 8) and triggers(1, 0, 0, 5, 8)
-print('PASS scan trigger: Spectre, VFO scans and History from Spectre/VFO use 5; Sentinel keeps DS')
+# History shown over a running Spectre scan keeps the Spectre dBm squelch:
+# a weak rise (an internal spur) under the squelch line does not stop it.
+def over_spectre(history_scan, rise):
+    put8(addr('gHistoryScan'), history_scan)
+    put8(addr('sentinelView'), 0); put8(addr('vfoScan'), 0); put8(addr('historySession'), 0)
+    put8(addr('historyListActive'), 1); put16(addr('settings') + Q['trig'], 20)
+    put8(addr('gIsPeak'), 0); put8(addr('isListening'), 0)
+    put8(addr('rssiReferenceValid'), 1); put16(addr('previousRssi'), 100)
+    put32(addr('scanInfo') + Q['sf'], 14512500)
+    reads[:] = [100 + rise, 100 + rise + 40]
+    call('Measure')
+    return u.mem_read(addr('gIsPeak'), 1)[0] == 1
+put8(addr('gSpectrumSQL'), 120)  # squelch line far above the signal
+assert not over_spectre(0, 8)
+assert triggers(0, 0, 0, 20, 8) is False  # same as Spectre without the History
+# The History's own scan (long *) and the History from the VFO ignore it.
+assert over_spectre(1, 8)
+assert triggers(1, 0, 1, 20, 8)
+put8(addr('gHistoryScan'), 0); put8(addr('gSpectrumSQL'), 0)
+assert over_spectre(0, 8)  # squelch open: triggers as before
+print('PASS scan trigger: Spectre, VFO scans and History from Spectre/VFO use 5; Sentinel keeps DS; History over Spectre keeps the dBm squelch')

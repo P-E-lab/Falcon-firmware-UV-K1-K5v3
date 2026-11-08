@@ -20,6 +20,7 @@
 #include "app/action.h"
 #include "app/app.h"
 #include "app/common.h"
+#include "app/main.h"
 #include "app/monitor.h"
 #include "app/spectrum.h"
 #include "apps/app_overlay.h"
@@ -115,6 +116,7 @@ void (*action_opt_table[])(void) = {
 #else
     [ACTION_OPT_FMESSAGE] = &FUNCTION_NOP,
 #endif
+    [ACTION_OPT_BAND_SCAN] = &APP_RunBandScan,
 };
 
 static_assert(ARRAY_SIZE(action_opt_table) == ACTION_OPT_LEN);
@@ -175,34 +177,54 @@ void ACTION_SingleDuo(void)
     gRequestDisplayScreen = DISPLAY_MAIN;
 }
 
+#define SCANLIST_CYCLE (MR_CHANNELS_LIST + 3)
+// Position in the scanlist cycle, 0 for an attribute outside it. The band
+// memories have no list either: they are told apart by their number.
+static uint8_t ScanListRank(uint16_t channel, uint8_t list)
+{
+    if (channel >= MR_CHANNELS_MAX - MAX_BANDS)
+        return MR_CHANNELS_LIST + 3;
+    if (list == 51)
+        return MR_CHANNELS_LIST + 2;
+    if (!list)
+        return MR_CHANNELS_LIST + 1;
+    return list <= MR_CHANNELS_LIST ? list : 0;
+}
 static void ACTION_ChangeScanList(int8_t direction)
 {
     const uint8_t vfo = gEeprom.TX_VFO & 1u;
     const uint16_t currentChannel = gEeprom.ScreenChannel[vfo];
     if (!IS_MR_CHANNEL(currentChannel) || gCurrentFunction == FUNCTION_TRANSMIT)
         return;
+    // Cycle: lists 1..25, then the memories without a list (NONE), the monitor
+    // memories (list 51, MONI) and the band memories (BAND), back to list 1.
     const ChannelAttributes_t *current = MR_GetChannelAttributes(currentChannel);
-    const uint8_t currentList =
-        (current && current->scanlist >= 1 && current->scanlist <= MR_CHANNELS_LIST) ? current->scanlist : 0;
-    const uint8_t origin = currentList ? currentList : (direction > 0 ? MR_CHANNELS_LIST : 1);
-    uint8_t best = MR_CHANNELS_LIST + 1;
+    uint8_t origin = current ? ScanListRank(currentChannel, current->scanlist) : 0;
+    if (!origin)
+        origin = direction > 0 ? SCANLIST_CYCLE : 1;
+    uint8_t best = SCANLIST_CYCLE + 1;
     uint16_t next = UINT16_MAX;
+    uint8_t rankNext = 0;
     for (uint16_t ch = MR_CHANNEL_FIRST; ch <= MR_CHANNEL_LAST; ++ch) {
         if (!RADIO_CheckValidChannel(ch, false, 0))
             continue;
         const ChannelAttributes_t *att = MR_GetChannelAttributes(ch);
-        if (!att || att->scanlist < 1 || att->scanlist > MR_CHANNELS_LIST)
+        const uint8_t rank = att ? ScanListRank(ch, att->scanlist) : 0;
+        if (!rank)
             continue;
-        int distance = direction > 0 ? att->scanlist - origin : origin - att->scanlist;
+        int distance = direction > 0 ? rank - origin : origin - rank;
         if (distance <= 0)
-            distance += MR_CHANNELS_LIST;
+            distance += SCANLIST_CYCLE;
         if (distance < best) {
             best = distance;
             next = ch;
+            rankNext = rank;
         }
     }
     if (next == UINT16_MAX)
         return;
+    // The arrows go on from the step reached (NONE or the memory's list).
+    MAIN_SetMemoryStep(next, rankNext == MR_CHANNELS_LIST + 1);
     gEeprom.MrChannel[vfo] = next;
     gEeprom.ScreenChannel[vfo] = next;
     gRequestSaveVFO = true;

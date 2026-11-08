@@ -99,7 +99,7 @@ static void RangeEditorClose(void)
     RangeEditorWake();
     rangeEditor.length = rangeEditor.dot = 0;
     WaitSpectrum = 0;
-    ResetModifiers();
+    ResetModifiers(true);
     SetState(SPECTRUM);
     RenderStatus();
     Render();

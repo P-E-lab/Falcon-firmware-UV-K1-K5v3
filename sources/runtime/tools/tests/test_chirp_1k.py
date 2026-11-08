@@ -3,8 +3,8 @@ import ast, logging, re, types
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-D1K = ROOT / 'chirp/falcon1k.chirp.v3.1.1.py'
-D4K = ROOT / 'chirp/falcon4k.chirp.v3.1.1.py'
+D1K = ROOT / 'chirp/falcon1k.chirp.v3.2.0.py'
+D4K = ROOT / 'chirp/falcon4k.chirp.v3.2.0.py'
 
 
 def hello(path, wire):
@@ -23,11 +23,13 @@ def hello(path, wire):
 
 
 # Each driver accepts only its own edition.
+assert hello(D1K, 'FALCON 7.0/3.2K') == 'FALCON 1K 3.2.0'
 assert hello(D1K, 'FALCON 7.0/3.1K') == 'FALCON 1K 3.1.1'
 assert hello(D1K, 'FALCON 7.0/3.1').startswith('REFUSED')
 assert hello(D1K, 'FALCON 7.0/3.0').startswith('REFUSED')
 assert hello(D4K, 'FALCON 7.0/3.1') == 'FALCON 4K 3.1.0'
 assert hello(D4K, 'FALCON 7.0/3.1K').startswith('REFUSED')
+assert hello(D4K, 'FALCON 7.0/3.2K').startswith('REFUSED')
 
 src = D1K.read_text()
 assert 'MR_CHANNELS_MAX = 1024' in src and 'BAND_FIRST = 995' in src
@@ -50,7 +52,7 @@ tree = ast.parse(src)
 cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == 'UVK5RadioEgzumer')
 model = next(n.value.value for n in cls.body if isinstance(n, ast.Assign)
              and any(isinstance(t, ast.Name) and t.id == 'MODEL' for t in n.targets))
-assert model == 'UV-K1 / UV-K5 V3 Falcon 1K v3.1.1'
+assert model == 'UV-K1 / UV-K5 V3 Falcon 1K v3.2.0'
 node = next(n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == '_supports_navigation')
 tmp = {}
 exec(compile(ast.Module(body=[node], type_ignores=[]), str(D1K), 'exec'), tmp)

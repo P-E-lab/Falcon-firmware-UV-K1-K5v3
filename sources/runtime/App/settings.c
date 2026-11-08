@@ -358,7 +358,8 @@ void SETTINGS_InitEEPROM(void)
     gSetting_set_met = (tmp >> 2) & 0x01;
     gSetting_set_gui = (tmp >> 3) & 0x01;
 
-    gSetting_set_ctr = Data[5] & 0x0F;
+    // Never written (erased) or out of range: the default contrast, 10.
+    gSetting_set_ctr = Data[5] != 0xFF && (Data[5] & 0x0F) ? Data[5] & 0x0F : 10;
 
     gSetting_set_tmr = Data[4] & 0x01;
     gSetting_nav_invert = Data[4] != 0xFF && ((Data[4] >> 2) & 0x01);

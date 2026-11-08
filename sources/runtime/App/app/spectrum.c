@@ -175,6 +175,17 @@ static uint32_t RangeStart = FMIN;
 static uint32_t RangeStop = 11000000;
 static uint8_t rangeModulation;
 static bool rangeModConfigured;
+// Spectre zoom (key 4): a temporary range around the last received frequency,
+// ±800 / 400 / 200 / 100 / 50 kHz in a loop, from the first level narrower than
+// the scan; EXIT goes back to the range or band that was scanned. Never saved:
+// 7 and the exit save the scan they replaced.
+static uint8_t zoomLevel;
+static uint32_t zoomCenter;
+static struct {
+    uint32_t start, stop;
+    uint8_t state, step, modulation;
+    bool mod;
+} zoomSaved;
 static uint16_t SpectrumSleepMs = 0;
 static uint8_t Noislvl_OFF = NoisLvl;
 static uint8_t Noislvl_ON = NoisLvl - NoiseHysteresis;
@@ -264,6 +275,18 @@ static bool gIsPeak = false;
 static bool historyListActive = false;
 // History opened by the VFO shortcut: no scan and no scan status line.
 static bool historySession;
+// BAND SCAN shortcut: the band list alone, silent, to pick the band the VFO
+// scans (bandPick, UINT8_MAX when left with EXIT).
+static bool bandPickSession;
+static uint8_t bandPick;
+// The band a VFO frequency scan is bounded to, with its step, modulation and
+// filter (stop 0: an ordinary frequency scan).
+static struct {
+    uint32_t start, stop;
+    uint8_t step, mod, bw;
+    char name[9]; // shown as the VFO title while the band is scanned
+    uint32_t lastRx; // last reception: the title until the next one, and SK2's target
+} vfoBand;
 // MESSAGES page of the history screen; the scan pauses while it is shown.
 static bool historyMessages;
 // Listening on a history entry uses its modulation and filter: the scanner
@@ -291,7 +314,7 @@ static inline __attribute__((always_inline)) bool HistoryOwnsStatus(void)
 // no scan, no RX, no LED.
 static inline __attribute__((always_inline)) bool HistorySilent(void)
 {
-    return historyMessages || (historySession && !gHistoryScan);
+    return historyMessages || (historySession && !gHistoryScan) || bandPickSession;
 }
 static bool gForceModulation = 0;
 static int16_t previousRssi;
@@ -404,6 +427,7 @@ static void Spectrum_Prepare_Tx(void);
 static void Skip();
 static NATIVE_CODE(lists) bool GetScanListLabel(uint8_t scanListIndex, char *bufferOut);
 static void DeInitSpectrum(void);
+static void ZoomOff(void);
 static void ToggleRX(bool on);
 static void HistoryClose(void);
 static void FrequencyDraft(VFO_Info_t *draft, uint32_t f, uint8_t profile, uint16_t css);
@@ -619,6 +643,12 @@ uint16_t BOARD_gMR_fetchChannel(const uint32_t freq)
     return FindMemoryChannel(freq, MR_CHANNEL_LAST, 0);
 }
 
+// First memory (bands excluded) on a VFO frequency, 20 Hz apart at most.
+uint16_t APP_MemoryOnFrequency(uint32_t freq)
+{
+    return FindMemoryChannel(freq, MAX_SCAN_CHANNELS - 1, 2);
+}
+
 // Display-only fallback for the 10 Hz rounding of aviation thirds.
 // Exact identities and all RX/TX tuning/profile decisions remain unchanged.
 static uint16_t ReceivedMemoryIdentity(uint32_t frequency, uint16_t exact)
@@ -677,9 +707,13 @@ bool APP_MLHoldRx(void)
 {
     return mlKeys && MLWatchActive() && isListening && mlOwner != (gEeprom.TX_VFO & 1u);
 }
+// The dBm squelch applies to Spectre and the VFO scans, also while the
+// History is shown over a running Spectre scan. Sentinel uses relative
+// detection only; the History's own scan (long *) and the History opened from
+// the VFO keep the relative rise alone.
 static bool AbsoluteSQL(void)
 {
-    return (vfoScan || !sentinelView) && !historyListActive;
+    return (vfoScan || !sentinelView) && !(historyListActive && (historySession || gHistoryScan));
 }
 
 // Rise needed to trigger a scan step. Sentinel keeps its DS setting; Spectre,
@@ -775,19 +809,13 @@ uint16_t GetNextChannelInSelectedScanLists(uint16_t currentChannel, bool directi
         }
         return 0xFFFF;
     }
-    ChannelAttributes_t cache;
-    uint32_t frequency = 0;
+    // The members noted by LoadActiveScanFrequencies: no flash read per step.
     uint16_t ch = currentChannel;
     for (uint16_t count = 0; count < MAX_SCAN_CHANNELS; ++count) {
         ch = direction ? (ch + 1 < MAX_SCAN_CHANNELS ? ch + 1 : 0) : (ch ? ch - 1 : MAX_SCAN_CHANNELS - 1);
-        PY25Q16_ReadBuffer(ADRESS_CHANNELS + (uint32_t)ch * 16, &frequency, sizeof frequency);
-        if (frequency < FMIN || frequency > FMAX)
-            continue;
-        MR_LoadChannelAttributesFromFlash(ch, &cache);
-        if (scanNoList ? cache.scanlist == 0
-                       : (cache.scanlist > 0 && cache.scanlist <= MR_CHANNELS_LIST &&
-                          (scanListOnly ? cache.scanlist == scanListOnly
-                                        : settings.scanListEnabled[cache.scanlist - 1]))) {
+        if (vfoScanMembers[ch >> 3] & (1u << (ch & 7))) {
+            ChannelAttributes_t cache;
+            MR_LoadChannelAttributesFromFlash(ch, &cache);
             nextDisplayList = scanNoList ? 1 : cache.scanlist;
             return ch;
         }
@@ -907,6 +935,9 @@ static void LoadActiveScanFrequencies(void)
                 scanNoList = false;
         uint8_t referenceList = MR_CHANNELS_LIST + 1;
         ChannelAttributes_t cache;
+        // The members are noted once here: each scan step then reads this table,
+        // not the flash, whatever the lists (or none) and however scattered.
+        memset(vfoScanMembers, 0, sizeof vfoScanMembers);
         for (uint16_t ch = MR_CHANNEL_FIRST; ch < MAX_SCAN_CHANNELS; ch++) {
             uint32_t frequency;
             PY25Q16_ReadBuffer(ADRESS_CHANNELS + (uint32_t)ch * 16, &frequency, sizeof(frequency));
@@ -922,6 +953,7 @@ static void LoadActiveScanFrequencies(void)
                         listReferenceParameters = ReadScanParameters(ch);
                     }
                     scanChannelsCount++;
+                    vfoScanMembers[ch >> 3] |= 1u << (ch & 7);
                     ++activityLists.count[scanNoList ? 0 : cache.scanlist - 1];
                 }
             }
@@ -1219,6 +1251,7 @@ static void DeInitSpectrum(void)
 
     if (historyListActive)
         HistoryClose();
+    ZoomOff();
     SaveSettings(false);
     settings.listenBw = savedListenBw;
     listenBwAM = savedListenBwAM;
@@ -1725,12 +1758,16 @@ static void ApplyRXProfile(bool listening)
     BK4819_SetFilterBandwidth(bandwidth, mode == MODULATION_AM);
 }
 
+// A reception in this Spectre/Sentinel session: the zoom has a centre.
+static bool zoomRx;
 static void FillfreqHistory(void)
 {
+    zoomRx = true;
     UpdateCssDetection();
     RememberHistoryFrequency(peak.f, false);
 }
 
+static bool rxPriming; // the Spectre entry's RX on/off, which primes the audio path
 static void ToggleRX(bool on)
 {
     scanNoiseCount = 0;
@@ -1766,7 +1803,8 @@ static void ToggleRX(bool on)
     if (!on)
         rxDisplayPending = false;
     isListening = on;
-    BK4819_ToggleGpioOut(BK4819_GPIO6_PIN2_GREEN, on);
+    if (!rxPriming)
+        BK4819_ToggleGpioOut(BK4819_GPIO6_PIN2_GREEN, on);
     if (!last_ptt_state) // a scan blink in progress ends with the RX change
         BK4819_ToggleGpioOut(BK4819_GPIO5_PIN1_RED, false);
     if (on) {
@@ -1939,14 +1977,15 @@ static bool InitScan()
     return scanInitializedSuccessfully;
 }
 
-static void ResetModifiers()
+static void ResetModifiers(bool reload)
 {
     memset(StringC, 0, sizeof(StringC));
     for (int i = 0; i < 128; ++i) {
         if (rssiHistory[i] == RSSI_MAX_VALUE)
             rssiHistory[i] = 0;
     }
-    LoadActiveScanFrequencies();
+    if (reload)
+        LoadActiveScanFrequencies();
     RelaunchScan();
 }
 
@@ -2162,7 +2201,7 @@ static bool IsBlacklisted(uint32_t f)
 {
     // Session blacklist removes all copies from the member bitmap; the
     // Spectrum history blacklist remains independent and unchanged.
-    if (vfoScan)
+    if (vfoScan && !vfoRangeSession)
         return false;
     uint32_t qf = f;
     for (uint16_t i = 0; i < HISTORY_SIZE; i++) {
@@ -2416,10 +2455,16 @@ static void DrawNums()
         GUI_DisplaySmallest(text, 2, Bottom_print, false, true);
         UI_FormatFrequency(text, SpectrumRangeStop);
         GUI_DisplaySmallest(text, 128, Bottom_print, false, true);
+        if (zoomLevel)
+            snprintf(text, sizeof(text), "+-%uK", (RangeStop - RangeStart) / 200);
 #ifdef ENABLE_BENCH
-        snprintf(text, sizeof(text), FastSpeed ? "F%u" : "%u", benchRatePerSec);
-        GUI_DisplaySmallest(text, (128 - (strlen(text) * 4 - 1)) / 2, Bottom_print, false, true);
+        else
+            snprintf(text, sizeof(text), FastSpeed ? "F%u" : "%u", benchRatePerSec);
+#else
+        else
+            text[0] = 0;
 #endif
+        GUI_DisplaySmallest(text, (128 - (strlen(text) * 4 - 1)) / 2, Bottom_print, false, true);
     }
 }
 
@@ -2708,15 +2753,29 @@ static void NextScanStep()
     if (scanEmpty)
         return;
     if (vfoScan && vfoRangeSession) {
+        // Step n of the grid from the scan start (8.33 kHz: thirds of 25 kHz,
+        // no drift). BAND SCAN goes in the Spectre order: jumps of k steps,
+        // then passes shifted by one step; a frequency scan goes up (k = 1).
+        static uint32_t n;
+        static uint8_t pass;
+        const uint8_t k = vfoBand.stop ? jumpSizes[settings.scanStepIndex] / scanInfo.scanStep : 1;
         if (!scanInfo.i) {
             scanInfo.i = 1;
+            n = pass = 0;
             return;
         }
-        uint32_t f = scanInfo.f + scanInfo.scanStep;
-        if (f >= BX4819_band1.upper && f < BX4819_band2.lower)
-            f += ((BX4819_band2.lower - f + scanInfo.scanStep - 1) / scanInfo.scanStep) * scanInfo.scanStep;
-        if (f > FMAX)
-            f = RangeStart;
+        uint32_t f;
+        uint16_t tries = 0;
+        do {
+            n += k;
+            for (unsigned again = 0; again <= k; ++again) { // pass 0 always fits
+                f = RangeStart + (scanInfo.scanStep == 833 ? (n * 2500 + 1) / 3 : n * scanInfo.scanStep);
+                if (f <= RangeStop) // FMAX, or the end of the BAND SCAN band
+                    break;
+                pass = pass + 1 < k ? pass + 1 : 0;
+                n = pass;
+            }
+        } while (f >= BX4819_band1.upper && f < BX4819_band2.lower && ++tries);
         scanInfo.f = f;
         return;
     }
@@ -2783,6 +2842,84 @@ static void NextScanStep()
 #endif
 }
 
+static void SpectrumRestart(void)
+{
+    gSpectrumChangeRequested = true;
+    isInitialized = false;
+    spectrumElapsedCount = 0;
+    WaitSpectrum = 0;
+    gIsPeak = false;
+    SPECTRUM_PAUSED = false;
+    SpectrumPauseCount = 0;
+    newScanStart = true;
+    ToggleRX(false);
+}
+
+// Exchange the zoom range with the scan it replaced (exit, 7 and DeInit).
+static void ZoomSwap(void)
+{
+    const uint32_t start = RangeStart, stop = RangeStop;
+    const uint8_t state = Spectrum_state, step = settings.scanStepIndex, modulation = rangeModulation;
+    const bool mod = rangeModConfigured;
+    RangeStart = zoomSaved.start;
+    RangeStop = zoomSaved.stop;
+    Spectrum_state = zoomSaved.state;
+    settings.scanStepIndex = zoomSaved.step;
+    rangeModConfigured = zoomSaved.mod;
+    rangeModulation = zoomSaved.modulation;
+    zoomSaved.start = start;
+    zoomSaved.stop = stop;
+    zoomSaved.state = state;
+    zoomSaved.step = step;
+    zoomSaved.mod = mod;
+    zoomSaved.modulation = modulation;
+}
+static void ZoomOff(void)
+{
+    if (!zoomLevel)
+        return;
+    ZoomSwap();
+    zoomLevel = 0;
+}
+static void ZoomNext(void)
+{
+    static const uint8_t halfKHz[5] = {160, 80, 40, 20, 10}; // x5 kHz: 800 .. 50
+    static const uint8_t steps[5] = {STEP_25kHz, STEP_12_5kHz, STEP_6_25kHz, STEP_2_5kHz, STEP_1kHz};
+    if (zoomLevel == 5)
+        zoomLevel = 0; // after ±50 kHz, back to ±800 kHz
+    else if (!zoomLevel) {
+        // Only around a reception of this session (a remembered or locked
+        // frequency from before is not a signal).
+        const uint32_t center = isListening && gIsPeak ? peak.f : lastReceivingFreq;
+        if (!zoomRx || center < FMIN || center > FMAX) {
+            ShowOSDPopup("NO SIGNAL YET");
+            return;
+        }
+        zoomCenter = center;
+        zoomSaved.start = RangeStart;
+        zoomSaved.stop = RangeStop;
+        zoomSaved.state = Spectrum_state;
+        zoomSaved.step = settings.scanStepIndex;
+        zoomSaved.mod = rangeModConfigured;
+        zoomSaved.modulation = rangeModulation;
+        // The zoom keeps the modulation in use (AM in the air band): an
+        // unconfigured range would take the VFO's.
+        rangeModConfigured = true;
+        rangeModulation = settings.modulationType;
+        // Start narrower than the scan shown (±50 kHz at least).
+        const uint32_t span = SpectrumRangeStop - SpectrumRangeStart;
+        while (zoomLevel < 4 && halfKHz[zoomLevel] * 1000u >= span)
+            ++zoomLevel;
+        Spectrum_state = SCAN_RANGE_MODE;
+        ShowOSDPopup("ZOOM");
+    }
+    const uint32_t half = halfKHz[zoomLevel] * 500u; // 10 Hz units
+    settings.scanStepIndex = steps[zoomLevel++];
+    RangeStart = zoomCenter > FMIN + half ? zoomCenter - half : FMIN;
+    RangeStop = zoomCenter + half < FMAX ? zoomCenter + half : FMAX;
+    SpectrumRestart();
+}
+
 void NextAppMode(void)
 {
 
@@ -2797,15 +2934,7 @@ void NextAppMode(void)
             Spectrum_state = CHANNEL_MODE;
             break;
     }
-    gSpectrumChangeRequested = true;
-    isInitialized = false;
-    spectrumElapsedCount = 0;
-    WaitSpectrum = 0;
-    gIsPeak = false;
-    SPECTRUM_PAUSED = false;
-    SpectrumPauseCount = 0;
-    newScanStart = true;
-    ToggleRX(false);
+    SpectrumRestart();
     ShowOSDPopup(sentinelView                       ? (Spectrum_state == CHANNEL_MODE     ? "SENTINEL LIST"
                                                        : Spectrum_state == SCAN_BAND_MODE ? "SENTINEL BAND"
                                                                                           : "SENTINEL RANGE")
@@ -2833,6 +2962,8 @@ static const uint8_t durations[] = {0, 20, 40, 60};
 
 uint8_t GetBandIndexForRow(uint8_t row)
 {
+    if (bandPickSession) // the pick keeps the memory order
+        return row;
     uint8_t pos = 0;
     for (uint8_t i = 0; i < bandCount; i++) {
         if (settings.bandEnabled[i]) {
@@ -2876,8 +3007,18 @@ static void SelectionMove(uint8_t *selected, int *scroll, uint8_t count, bool do
 /* --- BAND_LIST_SELECT: navigate and toggle band enable flags --- */
 static void StartScanSelection(void);
 static void SelectionMenuShort(void);
-static void HandleKeyBandList(uint8_t key)
+static __attribute__((noinline)) void HandleKeyBandList(uint8_t key)
 {
+    if (bandPickSession) { // one band: M scans it from the VFO, EXIT goes back
+        if (key == KEY_UP || key == KEY_DOWN)
+            SelectionMove(&bandListSelectedIndex, &bandListScrollOffset, bandCount, key == KEY_DOWN);
+        else if (key == KEY_MENU || key == KEY_EXIT) {
+            if (key == KEY_MENU && bandListSelectedIndex < bandCount)
+                bandPick = bandListSelectedIndex;
+            DeInitSpectrum();
+        }
+        return;
+    }
     if (!bandCount) {
         if (key == KEY_EXIT || key == KEY_MENU)
             StartScanSelection();
@@ -2985,7 +3126,7 @@ static void CycleScanSelection(bool forward)
             }
         }
         SetState(SPECTRUM);
-        ResetModifiers();
+        ResetModifiers(true);
         ShowScanNamePopup(gListName[scanListSelectedIndex]);
     } else if (bandCount) {
         unsigned index = bl;
@@ -3010,7 +3151,7 @@ static void StartScanSelection(void)
     SPECTRUM_PAUSED = false;
     SpectrumPauseCount = 0;
     WaitSpectrum = 0;
-    ResetModifiers();
+    ResetModifiers(true);
     SetState(SPECTRUM);
     SaveSettings(false);
     newScanStart = false;
@@ -3256,7 +3397,7 @@ static void HandleKeyParameters(uint8_t key)
         case KEY_EXIT: //Parameters
             if (scanOptionsChanged)
                 SaveSettings(false);
-            ResetModifiers();
+            ResetModifiers(true);
             SetState(SPECTRUM);
             break;
         default:
@@ -3489,7 +3630,22 @@ static __attribute__((noinline)) void HandleKeySpectrum(uint8_t key)
             break;
         case KEY_7:
             if (!historyListActive) {
+                if (zoomLevel)
+                    ZoomSwap(); // save the scan, not the zoom
                 SaveSettings(true);
+                if (zoomLevel)
+                    ZoomSwap();
+            }
+            break;
+        case KEY_4:
+            // No zoom from the list scan: its plot follows the memories.
+            if (!historyListActive && !sentinelView && Spectrum_state != CHANNEL_MODE)
+                ZoomNext();
+            break;
+        case KEY_8:
+            if (!historyListActive && !sentinelView) {
+                waterfallOn = !waterfallOn;
+                ShowOSDPopup(waterfallOn ? "WATERFALL ON" : "WATERFALL OFF");
             }
             break;
         case KEY_UP:
@@ -3531,8 +3687,10 @@ static __attribute__((noinline)) void HandleKeySpectrum(uint8_t key)
         case KEY_6: // next mode
             if (historyListActive) {
                 DeleteHistoryItem();
-            } else
+            } else {
+                ZoomOff();
                 NextAppMode();
+            }
             break;
         case KEY_SIDE1:
             if (SPECTRUM_PAUSED)
@@ -3585,6 +3743,10 @@ static __attribute__((noinline)) void HandleKeySpectrum(uint8_t key)
                 historyMenuSelectedIndex = historyMenuScrollOffset = 0;
                 SetState(HISTORY_MENU_SELECT);
             } else {
+                if (zoomLevel) { // the range editor and selections edit the real scan
+                    ZoomOff();
+                    SpectrumRestart();
+                }
                 if (Spectrum_state == SCAN_RANGE_MODE)
                     RangeEditorOpen();
                 else {
@@ -3619,6 +3781,11 @@ static __attribute__((noinline)) void HandleKeySpectrum(uint8_t key)
                 SPECTRUM_PAUSED = false;
                 StringCode[0] = '\0'; //Erase code
                 SetState(SPECTRUM);
+                break;
+            }
+            if (zoomLevel) { // EXIT leaves the zoom first, back to the scan
+                ZoomOff();
+                SpectrumRestart();
                 break;
             }
             if (WaitSpectrum)
@@ -3932,6 +4099,25 @@ static NATIVE_CODE(rf) void OnKeyDownStillNative(KEY_Code_t key)
 }
 
 
+// The first frame of a VFO scan is whole; then only the scanned VFO is redrawn.
+static bool vfoScanWholeFrame;
+// A one-second message over the VFO screen (BL ..., SKIPPED): the Spectre OSD
+// is not drawn during the VFO scans.
+// Its duration is Spectre's popup setting (0: none).
+static char vfoPopup[16];
+static uint32_t vfoPopupEnd;
+static uint16_t vfoPopupMs;
+static uint16_t SpectrePopupMs(void);
+static void VfoScanPopup(const char *text)
+{
+    if (!vfoPopupMs)
+        return;
+    strncpy(vfoPopup, text, sizeof vfoPopup - 1);
+    vfoPopupEnd = gGlobalSysTickCounter + vfoPopupMs / 10;
+    UI_DisplayPopup(vfoPopup); // once, over the screen as it is
+    ST7565_BlitFullScreen();
+}
+
 static void RenderStatus()
 {
     // The history keys popup rises over the status line: the scan parameters
@@ -3950,13 +4136,14 @@ static void RenderStatus()
 #endif
         // Only the small status line is refreshed once per elapsed second.
         // Keep the full-screen RX quieting and the scan/RX engine unchanged.
+        // A frequency or band scan refreshes it with the screen (600 ms).
         if (refresh)
             UI_DisplayStatus();
         if (!isListening && !MLWatchActive())
             gUpdateDisplay = true;
         return;
     }
-    if (HistoryOwnsStatus())
+    if (HistoryOwnsStatus() || bandPickSession)
         return;
     memset(gStatusLine, 0, sizeof(gStatusLine));
     DrawStatus();
@@ -3976,8 +4163,39 @@ static void DrawScanLabel(unsigned number, const char *name, unsigned start, uns
     GUI_DisplaySmallest(label, start + (width > textWidth ? (width - textWidth) / 2 : 0), 42, false, true);
 }
 
+// One row per completed sweep: solid above the squelch, every other dot of
+// every other row (one dot in four) for a weak signal 6 dB over the noise.
+static NATIVE_CODE(plot) void WaterfallPush(void)
+{
+    const int strong = ScanThreshold(), weak = activity.noiseDb + 6;
+    const bool dither = !(waterfallCount++ & 1);
+    for (unsigned x = 0; x < 128; ++x) {
+        unsigned w = (waterfall[0][x] | waterfall[1][x] << 8) << 1;
+        const uint16_t s = activity.samples[x];
+        if (waterfallSeen[x >> 3] >> (x & 7) & 1u && ActivityValid(s)) {
+            const int d = ActivityDb(s);
+            if (d >= strong || (d >= weak && dither && !(x & 1)))
+                w |= 1;
+        }
+        waterfall[0][x] = (uint8_t)w;
+        waterfall[1][x] = (uint8_t)(w >> 8);
+    }
+    memset(waterfallSeen, 0, sizeof waterfallSeen);
+}
+
+// During a reception the scan stops: every 500 ms a row shows the frequency
+// being received, so the waterfall keeps moving under the signal.
+static NATIVE_CODE(plot) void WaterfallListenRow(void)
+{
+    if (spectrumRxDbm != INT16_MIN)
+        RecordActivity(peak.f, gChannel, (spectrumRxDbm + 192) * 2);
+    WaterfallPush();
+    memcpy(gFrameBuffer[4], waterfall, sizeof waterfall);
+}
+
 static NATIVE_CODE(plot) void RenderSpectrumNative()
 {
+    activityBottom = waterfallOn ? ACTIVITY_WATERFALL_BOTTOM : ACTIVITY_PLOT_BOTTOM;
     // Keep the existing settings bookkeeping; graphical scaling is independent.
     UpdateDBMaxAuto();
     // The RX marker and its plotted sample share the existing captured reading.
@@ -4023,6 +4241,13 @@ static NATIVE_CODE(plot) void RenderSpectrumNative()
             y = ACTIVITY_TOP + 1;
         for (unsigned x = 0; x < 128; x += 2)
             gFrameBuffer[y / 8][x] ^= 1u << (y % 8);
+    }
+    if (waterfallOn) {
+        if (waterfallRow) {
+            waterfallRow = false;
+            WaterfallPush();
+        }
+        memcpy(gFrameBuffer[4], waterfall, sizeof waterfall);
     }
 }
 static void RenderSpectrum()
@@ -4132,14 +4357,34 @@ static void Render()
         return;
     }
     if (vfoScan) {
+        // A message stays drawn over a still screen for its time; a new
+        // reception cancels it (its first frame is whole); its end redraws all.
+        if (vfoPopup[0]) {
+            if (isListening && rxDisplayPending)
+                vfoPopup[0] = 0;
+            else if ((int32_t)(gGlobalSysTickCounter - vfoPopupEnd) < 0)
+                return;
+            else {
+                vfoPopup[0] = 0;
+                vfoScanWholeFrame = true;
+                rxDisplayPending = isListening;
+            }
+        }
         if (MLWatchActive() && gScreenToDisplay != DISPLAY_MAIN)
             return;
         if (isListening && !rxDisplayPending && !(MLWatchActive() && gUpdateDisplay))
             return;
         if (MLWatchActive() && !gUpdateDisplay && !rxDisplayPending)
             return;
+        // While it scans, only the scanned VFO is redrawn; whole frames at the
+        // start, during a reception and just after it (its RX meter is cleared),
+        // and after a message.
+        if (!isListening && !MLWatchActive() && !vfoScanWholeFrame)
+            gUiScanPartial = vfoRangeSession ? UI_SCAN_FREQUENCY : UI_SCAN_BLOCK;
+        vfoScanWholeFrame = isListening;
         VfoScanSyncDisplay();
         UI_DisplayMain();
+        gUiScanPartial = UI_SCAN_FULL;
         gUpdateDisplay = false;
 #ifdef ENABLE_RSSI_BAR
         if (isListening)
@@ -4159,9 +4404,18 @@ static void Render()
                 if (changed & 2)
                     ST7565_BlitLine(3);
             }
-        } else if (DrawSpectrumDbm(peak.f)) {
-            ST7565_BlitLine(1);
-            ST7565_BlitLine(2);
+        } else {
+            if (DrawSpectrumDbm(peak.f)) {
+                ST7565_BlitLine(1);
+                ST7565_BlitLine(2);
+            }
+            if (waterfallOn && waterfallRow && APP_NativeBegin(NATIVE_PLOT)) {
+                waterfallRow = false;
+                WaterfallListenRow();
+                APP_NativeEnd();
+                ST7565_BlitLine(4);
+                ST7565_BlitLine(5);
+            }
         }
         return;
     }
@@ -4220,6 +4474,10 @@ static void Render()
                 RenderBandSelect();
             else
                 RenderScanListSelect();
+            if (bandPickSession && CHANNEL_IsActive()) // the band editor has its own title
+                memset(gStatusLine, 0, sizeof gStatusLine);
+            if (bandPickSession)
+                ST7565_BlitStatusLine();
             if (CHANNEL_IsActive())
                 CHANNEL_Display();
             else
@@ -4347,6 +4605,7 @@ static __attribute__((noinline)) void HandleUserInput(void)
             } else {
                 if (kbd.current == KEY_INVALID && vfoScanSkipTicks >= 2 && vfoScanSkipTicks < 80 &&
                     isListening) {
+                    VfoScanPopup("SKIPPED");
                     Skip();
                     RenderStatus();
                     Render();
@@ -4360,8 +4619,9 @@ static __attribute__((noinline)) void HandleUserInput(void)
                 if (vfoScanSide2Ticks < 80)
                     ++vfoScanSide2Ticks;
             } else {
+                // BAND SCAN: while it scans, SK2 takes its last reception.
                 if (kbd.current == KEY_INVALID && vfoScanSide2Ticks >= 2 && vfoScanSide2Ticks < 80 &&
-                    isListening)
+                    (isListening || APP_ScanLastRx()))
                     VfoScanBlacklist();
                 vfoScanSide2Ticks = 0;
             }
@@ -4816,7 +5076,9 @@ static __attribute__((noinline)) void Tick(void)
             APP_TimeSlice500ms();
         else {
             gNextTimeslice_500ms = false;
-            if (vfoScan && currentState == SPECTRUM && !osdPopupTimer)
+            if (isListening && waterfallOn)
+                waterfallRow = true;
+            if (vfoScan && currentState == SPECTRUM && !osdPopupTimer && !vfoPopup[0]) // not over a message
                 UI_MAIN_TimeSlice500ms();
             if (sentinelView && isListening && currentState == SPECTRUM && !historyListActive &&
                 !osdPopupTimer) {
@@ -4857,18 +5119,22 @@ static __attribute__((noinline)) void Tick(void)
         SYSTEM_DelayMs(10);
     }
 
+    // A new scan first finds out whether it has anything to scan: a stale
+    // "empty" from another session must not keep NO CH / LIST up for good.
+    if (newScanStart) {
+        newScanStart = false;
+        InitScan();
+    }
+
     if (EmptyScanText()) {
+        if (isListening) // nothing to scan: no RX, so the message is drawn alone
+            ToggleRX(false);
         if (gNextTimeslice_display) {
             gNextTimeslice_display = false;
             RenderStatus();
             Render();
         }
         return;
-    }
-
-    if (newScanStart) {
-        newScanStart = false;
-        InitScan();
     }
 
     if (!isListening && currentState == SPECTRUM) {
@@ -4947,7 +5213,7 @@ void APP_RunSpectrum(void)
     }
     Backlight_On = true;
     osdPopupTimer = 0; // Do not carry a previous session's confirmation into a new scan.
-    const char *entryText = !vfoScan && !scanListOnly && !historySession
+    const char *entryText = !vfoScan && !scanListOnly && !historySession && !bandPickSession
                                 ? (sentinelView ? (Spectrum_state == CHANNEL_MODE     ? "SENTINEL LIST"
                                                    : Spectrum_state == SCAN_BAND_MODE ? "SENTINEL BAND"
                                                                                       : "SENTINEL RANGE")
@@ -4973,6 +5239,7 @@ void APP_RunSpectrum(void)
     lastNamedChannel = UINT16_MAX;
     lastNamedFrequency = 0;
     postTxListening = false;
+    zoomRx = false; // each Spectre/Sentinel session starts with no signal for the zoom
     spectrumPtt2Key = KEY_INVALID;
     isListening = false;
     isKnownChannel = false; // no stale VFO/previous RX reference on entry
@@ -4990,13 +5257,20 @@ void APP_RunSpectrum(void)
         SpectrumMonitor = 0;
         if (!scanListOnly)
             LoadMonitorFrequencies();
+        // LoadSettings reads the list usage when it loads; the History, MESSAGES
+        // and BAND SCAN opened from the VFO scan no memory: none of it is read.
+        const bool vfoPage = historySession || bandPickSession;
+        const bool usageRead = !Key_1_pressed && !SettingsLoaded;
         if (!Key_1_pressed)
             LoadSettings();
         Key_1_pressed = 0;
         DelayRssi = FastSpeed ? 800 : 1500;
-        if (!vfoScan)
+        if (!vfoScan && !vfoPage && !usageRead)
             SCANLISTS_InitUsage();
-        LoadActiveScanFrequencies();
+        if (vfoPage)
+            Spectrum_Prepare_Tx();
+        else
+            LoadActiveScanFrequencies();
         if (!vfoScan)
             LoadActiveBands();
         ResetScanParameterOverrides();
@@ -5018,12 +5292,12 @@ void APP_RunSpectrum(void)
 #ifdef ENABLE_FEAT_F4HWN_RESUME_STATE
         // Persist the exact scan mode before entering the resumable Spectrum state.
         // This ensures F+6/F+7/F+8 is restored correctly after a power cycle.
-        if (!scanListOnly && !historySession) {
+        if (!scanListOnly && !historySession && !bandPickSession) {
             gEeprom.CURRENT_STATE = 4;
             SETTINGS_WriteCurrentState();
         }
 #endif
-        ResetModifiers();
+        ResetModifiers(false); // the scan memories were just read
         BackupRegisters();
         BK4819_WriteRegister(BK4819_REG_30, 0);
         SYSTEM_DelayMs(10);
@@ -5037,7 +5311,9 @@ void APP_RunSpectrum(void)
         BK4819_ToggleGpioOut(BK4819_GPIO5_PIN1_RED, 0);
         BK4819_WriteRegister(BK4819_REG_47, 0x6042);
         BK4819_WriteRegister(BK4819_REG_48, 0xB3AA); // AF gain
+        rxPriming = true; // the audio priming is not a reception: no green flash
         ToggleRX(true), ToggleRX(false);             // hack to prevent noise when squelch off
+        rxPriming = false;
         // Startup tuning is not a received signal. No value before the first RX.
         spectrumRxDbm = INT16_MIN;
         spectrumRxDbmFresh = false;
@@ -5070,16 +5346,22 @@ void APP_RunSpectrum(void)
                 HistoryTogglePage();
 #endif
         }
+        if (bandPickSession) {
+            HistoryQuiet();
+            SetState(BAND_LIST_SELECT);
+            bandListScrollOffset = 0;
+            if (bandListSelectedIndex >= bandCount)
+                bandListSelectedIndex = 0;
+        }
 #ifdef ENABLE_CPU_TEMP
         temp_dc = CpuTemp_ReadDeciCelsius();
         //cpu_hz = CpuInfo_GetClockHz();
 #endif
         Skip();
-        // Keep creation reachable after the final item has been removed.
-        if (!vfoScan && !scanListOnly) {
-            SCANLISTS_InitUsage();
+        // Keep creation reachable after the final item has been removed (the
+        // list usage was read above).
+        if (!vfoScan && !scanListOnly)
             BuildScanListSlots();
-        }
         if (!vfoScan) {
             RenderStatus();
             Render();
@@ -5108,6 +5390,24 @@ void APP_RunSpectrum(void)
 }
 
 
+// BAND SCAN's last reception (0: none yet).
+uint32_t APP_ScanLastRx(void)
+{
+    return vfoScan && vfoBand.stop ? vfoBand.lastRx : 0;
+}
+
+// The name of the band BAND SCAN scans, NULL otherwise.
+const char *APP_ScanBandName(void)
+{
+    return vfoScan && vfoBand.stop && vfoBand.name[0] ? vfoBand.name : NULL;
+}
+
+// A VFO scan stopped on a signal (the VFO title may then show a memory name).
+bool APP_VfoScanListening(void)
+{
+    return vfoScan && isListening;
+}
+
 uint8_t APP_GetScanningVfo(void)
 {
     // ML keeps the normal idle VFO titles rather than the blinking SCAN label.
@@ -5119,6 +5419,14 @@ static void VfoScanSyncDisplay(void)
     if (vfoRangeSession) {
         VFO_Info_t *v = &gEeprom.VfoInfo[vfoScanVfo];
         v->freq_config_RX.Frequency = scanInfo.f;
+        if (vfoBand.stop && isListening)
+            vfoBand.lastRx = scanInfo.f;
+        if (vfoBand.stop) {
+            v->Modulation = vfoBand.mod;
+            v->STEP_SETTING = vfoBand.step;
+            v->StepFrequency = gStepFrequencyTable[vfoBand.step];
+            v->CHANNEL_BANDWIDTH = vfoBand.bw;
+        }
         v->Band = FREQUENCY_GetBand(scanInfo.f);
         RADIO_ApplyOffset(v);
         gEeprom.RX_VFO = vfoScanVfo;
@@ -5147,10 +5455,20 @@ static void VfoScanSyncDisplay(void)
 
 static void VfoScanBlacklist(void)
 {
-    if (vfoRangeSession) {
-        Skip();
+    char text[16] = "BL ";
+    if (vfoRangeSession) { // frequency and band scans: the Spectre blacklist
+        const uint32_t f = isListening ? scanInfo.f : vfoBand.lastRx;
+        lastReceivingFreq = f;
+        sprintf(text + 3, "%u.%05u", (unsigned)(f / 100000), (unsigned)(f % 100000));
+        VfoScanPopup(text);
+        Blacklist();
         return;
     }
+    SETTINGS_FetchChannelName(text + 3, ScanChannel); // memory scans: the memory leaves the scan
+    if (!text[3])
+        sprintf(text + 3, "CH-%04u", ScanChannel + 1);
+    text[11] = 0;
+    VfoScanPopup(text);
     const uint32_t frequency = scanInfo.f;
     for (uint16_t ch = 0; ch < MR_CHANNELS_MAX; ++ch) {
         const uint8_t mask = 1u << (ch & 7);
@@ -5180,7 +5498,8 @@ void APP_RunCurrentScanList(uint8_t list)
     if ((!mlWatch && !frequencyScan && list > MR_CHANNELS_LIST + 1) || scanListOnly)
         return;
     if (frequencyScan && (!IS_FREQ_CHANNEL(gTxVfo->CHANNEL_SAVE) ||
-                          RX_freq_check(gTxVfo->pRX->Frequency) < 0 || gTxVfo->STEP_SETTING >= STEP_N_ELEM))
+                          (!vfoBand.stop && (RX_freq_check(gTxVfo->pRX->Frequency) < 0 ||
+                                             gTxVfo->STEP_SETTING >= STEP_N_ELEM))))
         return;
     if (mlWatch)
         list = MR_CHANNELS_LIST + 1;
@@ -5256,6 +5575,9 @@ void APP_RunCurrentScanList(uint8_t list)
             mlPriority[i] = MLPriorityChannel(i);
     }
     vfoScan = true;
+    vfoScanWholeFrame = true;
+    vfoPopupMs = SpectrePopupMs();
+    vfoPopup[0] = 0;
     vfoScanKeysReady = false;
     vfoScanSkipTicks = 0;
     vfoScanSide2Ticks = 0;
@@ -5269,7 +5591,7 @@ void APP_RunCurrentScanList(uint8_t list)
     memset(settings.scanListEnabled, 0, sizeof(settings.scanListEnabled));
     if (!allMemory && !frequencyScan)
         settings.scanListEnabled[list - 1] = true;
-    FastSpeed = allMemory || frequencyScan;
+    FastSpeed = allMemory || (frequencyScan && !vfoBand.stop); // BAND SCAN: normal speed
     DelayRssi = FastSpeed ? 800 : 1500;
     gMonitorScan = false;
     MonitorIndex = 0;
@@ -5282,6 +5604,13 @@ void APP_RunCurrentScanList(uint8_t list)
         settings.scanStepIndex = gTxVfo->STEP_SETTING;
         settings.listenBw = gTxVfo->CHANNEL_BANDWIDTH;
         settings.modulationType = gTxVfo->Modulation;
+        if (vfoBand.stop) {
+            RangeStart = vfoBand.start;
+            RangeStop = vfoBand.stop;
+            settings.scanStepIndex = vfoBand.step;
+            settings.listenBw = vfoBand.bw;
+            settings.modulationType = vfoBand.mod;
+        }
     }
     APP_RunSpectrum();
 
@@ -5352,6 +5681,58 @@ void APP_RunAllMemoryScan(void)
 {
     // Internal selector 51 means all memories except the Monitor list.
     APP_RunCurrentScanList(IS_FREQ_CHANNEL(gTxVfo->CHANNEL_SAVE) ? SCAN_VFO_FREQUENCY : MR_CHANNELS_LIST + 1);
+}
+
+// BAND SCAN shortcut: pick a band (the last memories), then scan it on the
+// active VFO, in frequency mode, from its start with its step, modulation and
+// filter. EXIT gives the VFO back as it was, memory mode included; a stop on a
+// signal keeps the frequency and the band's settings.
+void APP_RunBandScan(void)
+{
+    LoadActiveBands();
+    if (!bandCount) {
+        UI_DisplayPopup("NO BAND");
+        ST7565_BlitFullScreen();
+        SYSTEM_DelayMs(1000);
+        return;
+    }
+    bandPick = UINT8_MAX;
+    bandPickSession = true;
+    APP_RunSpectrum();
+    bandPickSession = false;
+    currentState = SPECTRUM; // the next Spectre opens on its scan, not on this list
+    selectionHelp = false;
+    scanEmpty = false; // worked out without the memories: not the next Spectre's
+    if (bandPick >= bandCount)
+        return;
+    const bandparameters *b = &BParams[bandPick];
+    vfoBand.start = b->Startfrequency < b->Stopfrequency ? b->Startfrequency : b->Stopfrequency;
+    vfoBand.stop = b->Startfrequency < b->Stopfrequency ? b->Stopfrequency : b->Startfrequency;
+    vfoBand.step = b->scanStep;
+    vfoBand.mod = b->modulationType;
+    vfoBand.bw = b->bandwidth;
+    unsigned n = 0;
+    while (n < 8 && (uint8_t)(b->BandName[n] - ' ') < 95)
+        vfoBand.name[n] = b->BandName[n], ++n;
+    while (n && vfoBand.name[n - 1] == ' ')
+        --n;
+    vfoBand.name[n] = 0;
+    vfoBand.lastRx = 0;
+    const uint8_t vfo = gEeprom.TX_VFO & 1u;
+    const uint16_t screen = gEeprom.ScreenChannel[vfo];
+    if (IS_MR_CHANNEL(screen)) {
+        gEeprom.ScreenChannel[vfo] = FREQ_CHANNEL;
+        RADIO_ConfigureChannel(vfo, VFO_CONFIGURE_RELOAD);
+        RADIO_SelectVfos();
+    }
+    APP_RunCurrentScanList(SCAN_VFO_FREQUENCY);
+    vfoBand.stop = 0;
+    if (IS_MR_CHANNEL(screen) && kbd.current == KEY_EXIT) {
+        gEeprom.ScreenChannel[vfo] = screen;
+        RADIO_ConfigureChannel(vfo, VFO_CONFIGURE_RELOAD);
+        RADIO_SelectVfos();
+    }
+    gRequestSaveVFO = true;
 }
 
 void APP_RunVfoScanRange(void)
@@ -5644,6 +6025,14 @@ static void SelectScanProfile(bool sentinel)
 }
 
 
+// Spectre's popup duration, whatever profile is loaded (the VFO scans' messages).
+static uint16_t SpectrePopupMs(void)
+{
+    uint8_t index;
+    PY25Q16_ReadBuffer(ADRESS_PARAMS + offsetof(SettingsEEPROM, osdPopupIndex), &index, 1);
+    return osdPopupTimes[index < ARRAY_SIZE(osdPopupTimes) ? index : 1];
+}
+
 void LoadSettings()
 {
     if (SettingsLoaded)
@@ -5700,7 +6089,9 @@ void LoadSettings()
 
 static void SaveSettings(bool notify)
 {
-    if (scanListOnly || vfoRangeSession)
+    // The VFO scans and the pages opened from the VFO (BAND SCAN's list, the
+    // History, MESSAGES) borrow this engine: they never write Spectre's settings.
+    if (scanListOnly || vfoRangeSession || bandPickSession || historySession)
         return;
     SettingsEEPROM eepromData;
     PY25Q16_ReadBuffer(ADRESS_PARAMS, &eepromData, sizeof eepromData);
@@ -5992,6 +6383,25 @@ static NATIVE_CODE(lists) void GetScanListRow(uint16_t displayIndex, ListRow *ro
 static NATIVE_CODE(lists) void GetBandRow(uint16_t index, ListRow *row)
 {
     uint8_t bandIndex = GetBandIndexForRow((uint8_t)index);
+    if (bandPickSession) { // name, then the limits in MHz: whole, or one decimal
+        const bandparameters *b = &BParams[bandIndex];
+        unsigned n = 0;
+        while (n < 8 && (uint8_t)(b->BandName[n] - ' ') < 95)
+            row->left[n] = b->BandName[n], ++n;
+        while (n && row->left[n - 1] == ' ')
+            --n;
+        row->left[n] = 0;
+        char *p = row->right;
+        const bool up = b->Startfrequency < b->Stopfrequency;
+        for (unsigned i = 0; i < 2; ++i) {
+            const uint32_t f = i != up ? b->Startfrequency : b->Stopfrequency;
+            const unsigned tenths = (f + (i ? 9999 : 0)) / 10000; // outward to 100 kHz: covers the band
+            p += sprintf(p, i ? "-%u" : "%u", tenths / 10);
+            if (f % 100000)
+                p += sprintf(p, ".%u", tenths % 10);
+        }
+        return;
+    }
     snprintf(row->left, sizeof(row->left), "%02d-%s", bandIndex + 1, BParams[bandIndex].BandName);
     if (settings.bandEnabled[bandIndex]) {
         strcpy(row->right, "<====");
@@ -6158,8 +6568,9 @@ static inline __attribute__((always_inline)) void DrawPageTitle(const char *titl
 {
     memset(gFrameBuffer, 0, sizeof gFrameBuffer);
     DrawListTitle(title, counter);
-    if (HistoryOwnsStatus()) {
-        memcpy(gStatusLine, gFrameBuffer[0], sizeof gStatusLine);
+    if (HistoryOwnsStatus() || bandPickSession) {
+        for (unsigned x = 0; x < sizeof gStatusLine; ++x)
+            gStatusLine[x] = bandPickSession ? gFrameBuffer[0][x] << 1 : gFrameBuffer[0][x];
         memset(gFrameBuffer[0], 0, sizeof gFrameBuffer[0]);
     }
 }
@@ -6236,7 +6647,7 @@ static NATIVE_CODE(lists) void RenderScanSelection(const char *title, const char
         const uint8_t height = historyPage ? DrawHistoryRow(scroll, &text, UINT8_MAX) : 1;
         if (row + height > (historyPage ? lines : MAX_VISIBLE_LINES))
             break;
-        const uint8_t y = (historyPage ? top : 10) + row * 7;
+        const uint8_t y = (historyPage ? top : bandPickSession ? 5 : 10) + row * 7;
         if (historyPage)
             DrawHistoryRow(scroll, &text, y);
         else
@@ -6250,7 +6661,7 @@ static NATIVE_CODE(lists) void RenderScanSelection(const char *title, const char
         if (historyPage)
             CHANNEL_DrawHistoryHelp(false);
         else
-            CHANNEL_DrawSelectionHelp(currentState == BAND_LIST_SELECT);
+            CHANNEL_DrawSelectionHelp(currentState == BAND_LIST_SELECT ? 1 + bandPickSession : 0);
     }
 }
 
@@ -6317,9 +6728,11 @@ static void RenderParametersSelect()
 
 NATIVE_CODE(lists) void RenderBandSelectNative()
 {
-    char title[24];
-    snprintf(title, sizeof(title), "%d/%d", CountActiveBands(), bandCount);
-    RenderScanSelection("BAND:", title, bandCount, bandListSelectedIndex, bandListScrollOffset, GetBandRow);
+    char title[24] = "";
+    if (!bandPickSession) // the pick has one band: no count
+        snprintf(title, sizeof(title), "%d/%d", CountActiveBands(), bandCount);
+    RenderScanSelection(bandPickSession ? "BAND SCAN" : "BAND:", title, bandCount, bandListSelectedIndex,
+                        bandListScrollOffset, GetBandRow);
 }
 void RenderBandSelect()
 {

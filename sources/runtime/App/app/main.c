@@ -178,6 +178,9 @@ static void processFKeyFunction(const KEY_Code_t Key, const bool beep)
 // ── Channel move ─────────────────────────────────────────────────────────────
 
 static uint16_t memorySequential[2];
+// A memory without a list shows twice: in place and in the NONE step. This
+// remembers the memory reached in the NONE step (+1), per VFO.
+static uint16_t memoryNone[2];
 void channelMove(uint16_t Channel)
 {
     if (!RADIO_CheckValidChannel(Channel, false, 0)) {
@@ -185,6 +188,7 @@ void channelMove(uint16_t Channel)
     }
 
     memorySequential[gEeprom.TX_VFO] = MR_GetChannelAttributes(Channel)->scanlist == 0 ? Channel + 1u : 0;
+    memoryNone[gEeprom.TX_VFO] = 0;
     gEeprom.MrChannel[gEeprom.TX_VFO] = (uint16_t)Channel;
     gEeprom.ScreenChannel[gEeprom.TX_VFO] = (uint16_t)Channel;
     gVfoConfigureMode = VFO_CONFIGURE_RELOAD;
@@ -488,52 +492,90 @@ static void MAIN_Key_MENU(bool bKeyPressed, bool bKeyHeld)
 // ── UP/DOWN keys ─────────────────────────────────────────────────────────────
 
 // Display navigation only: group by list without renumbering NOR memories.
-static uint8_t MemoryListGroup(uint16_t channel, const ChannelAttributes_t *a)
+// Lists 1..25, then the memories without a list, then the monitor memories,
+// then the bands. A memory without a list stays in place: it follows the
+// list of the nearest listed memory below it (`inherit`).
+static uint8_t MemoryListGroup(uint16_t channel, const ChannelAttributes_t *a, uint8_t *inherit)
 {
     if (a->scanlist >= 1 && a->scanlist <= MR_CHANNELS_LIST)
-        return a->scanlist;
+        return *inherit = a->scanlist;
     if (a->scanlist == 51)
-        return MR_CHANNELS_LIST + 1;
-    return channel >= MR_CHANNELS_MAX - MAX_BANDS ? MR_CHANNELS_LIST + 3 : MR_CHANNELS_LIST + 2;
+        return MR_CHANNELS_LIST + 2;
+    if (channel >= MR_CHANNELS_MAX - MAX_BANDS)
+        return MR_CHANNELS_LIST + 3;
+    return *inherit ? *inherit : MR_CHANNELS_LIST + 1;
+}
+void MAIN_SetMemoryStep(uint16_t channel, bool none)
+{
+    memorySequential[gEeprom.TX_VFO] = 0;
+    memoryNone[gEeprom.TX_VFO] = none ? channel + 1u : 0;
 }
 static uint16_t NextMemoryByList(uint16_t current, int8_t direction)
 {
-    if (memorySequential[gEeprom.TX_VFO] == current + 1u) {
-        uint16_t next = RADIO_FindNextChannel(current + direction, direction, false, gEeprom.TX_VFO);
-        memorySequential[gEeprom.TX_VFO] = next + 1u;
+    const uint8_t vfo = gEeprom.TX_VFO;
+    if (memorySequential[vfo] == current + 1u) {
+        uint16_t next = RADIO_FindNextChannel(current + direction, direction, false, vfo);
+        memorySequential[vfo] = next + 1u;
         return next;
     }
     const bool forward = direction > 0;
-    const ChannelAttributes_t *active = MR_GetChannelAttributes(current);
     const uint32_t stride = MR_CHANNEL_LAST + 1u;
     const uint32_t reverse = forward ? 0 : UINT32_MAX;
-    const uint32_t currentKey = ((uint32_t)MemoryListGroup(current, active) * stride + current) ^ reverse;
+    uint8_t none = 0;
+    uint32_t currentKey = ((uint32_t)MemoryListGroup(current, MR_GetChannelAttributes(current), &none) * stride +
+                           current) ^ reverse;
     uint16_t next = UINT16_MAX, wrap = UINT16_MAX;
     uint32_t nextKey = 0, wrapKey = 0;
+    bool nextNone = false, wrapNone = false;
     // Read attributes in small batches: no channel-sized sorting buffer or
-    // thousands of individual NOR transactions on every keypress.
+    // thousands of individual NOR transactions on every keypress. The first
+    // pass stops at the current memory to know the list it follows.
     ChannelAttributes_t block[32];
-    for (uint16_t first = MR_CHANNEL_FIRST; first <= MR_CHANNEL_LAST; first += 32) {
-        const uint16_t count = MR_CHANNEL_LAST - first + 1 < 32 ? MR_CHANNEL_LAST - first + 1 : 32;
-        PY25Q16_ReadBuffer(ADRESS_CHANNELS_ATTRIBUTES + (uint32_t)first * sizeof *block, block,
-                           count * sizeof *block);
-        for (uint8_t i = 0; i < count; ++i) {
-            const ChannelAttributes_t *a = &block[i];
-            if (a->band > BAND7_470MHz)
-                continue;
-            const uint16_t ch = first + i;
-            const uint32_t key = ((uint32_t)MemoryListGroup(ch, a) * stride + ch) ^ reverse;
-            if (wrap == UINT16_MAX || key < wrapKey) {
-                wrap = ch;
-                wrapKey = key;
-            }
-            if (key > currentKey && (next == UINT16_MAX || key < nextKey)) {
-                next = ch;
-                nextKey = key;
+    for (uint8_t pass = 0; pass < 2; ++pass) {
+        uint8_t inherit = 0;
+        for (uint16_t first = MR_CHANNEL_FIRST; first <= MR_CHANNEL_LAST; first += 32) {
+            const uint16_t count = MR_CHANNEL_LAST - first + 1 < 32 ? MR_CHANNEL_LAST - first + 1 : 32;
+            PY25Q16_ReadBuffer(ADRESS_CHANNELS_ATTRIBUTES + (uint32_t)first * sizeof *block, block,
+                               count * sizeof *block);
+            for (uint8_t i = 0; i < count; ++i) {
+                const ChannelAttributes_t *a = &block[i];
+                if (a->band > BAND7_470MHz)
+                    continue;
+                const uint16_t ch = first + i;
+                const uint8_t group = MemoryListGroup(ch, a, &inherit);
+                const bool unlisted = !a->scanlist && ch < MR_CHANNELS_MAX - MAX_BANDS;
+                uint32_t key = ((uint32_t)group * stride + ch) ^ reverse;
+                const uint32_t noneKey = ((uint32_t)(MR_CHANNELS_LIST + 1) * stride + ch) ^ reverse;
+                if (!pass) {
+                    if (ch == current) {
+                        currentKey = unlisted && memoryNone[vfo] == current + 1u ? noneKey : key;
+                        goto found;
+                    }
+                    continue;
+                }
+                // In place, then (in place elsewhere) once more in the NONE step.
+                for (uint8_t twice = 0; twice < (unlisted && group != MR_CHANNELS_LIST + 1 ? 2 : 1); ++twice) {
+                    if (wrap == UINT16_MAX || key < wrapKey) {
+                        wrap = ch;
+                        wrapKey = key;
+                        wrapNone = twice;
+                    }
+                    if (key > currentKey && (next == UINT16_MAX || key < nextKey)) {
+                        next = ch;
+                        nextKey = key;
+                        nextNone = twice;
+                    }
+                    key = noneKey;
+                }
             }
         }
+    found:;
     }
-    return next != UINT16_MAX ? next : wrap;
+    const bool inNone = next != UINT16_MAX ? nextNone : wrapNone;
+    if (next == UINT16_MAX)
+        next = wrap;
+    memoryNone[vfo] = inNone ? next + 1u : 0;
+    return next;
 }
 
 static void MAIN_Key_UP_DOWN(bool bKeyPressed, bool bKeyHeld, int8_t Direction)

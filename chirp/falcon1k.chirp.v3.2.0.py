@@ -12,7 +12,7 @@
 # See GPL-2.0.txt or <https://www.gnu.org/licenses/> for the full license.
 
 # Falcon CHIRP driver — navigation support added in 2.0.1-OA.
-# Load this file as a CHIRP custom module, then select Quansheng / UV-K1 / UV-K5 V3 Falcon 1K v3.1.1.
+# Load this file as a CHIRP custom module, then select Quansheng / UV-K1 / UV-K5 V3 Falcon 1K v3.2.0.
 # Download a fresh image from the target radio before making edits.
 # Battery options follow the downloaded firmware version; EEPROM IDs stay stable.
 # Falcon 1K: 1024 memories in the firmware slot's own config bank (F4HWN layout).
@@ -46,7 +46,7 @@ DEBUG_SHOW_OBFUSCATED_COMMANDS = False
 # might be useful for someone debugging some obscure memory issue
 DEBUG_SHOW_MEMORY_ACTIONS = False
 
-DRIVER_VERSION = "Falcon 1K driver: 2026/11/06 v3.1.1"
+DRIVER_VERSION = "Falcon 1K driver: 2026/11/08 v3.2.0"
 
 VALEUR_COMPILER = "ENABLE"
 
@@ -658,10 +658,10 @@ KEYACTIONS_LIST = ["NONE", "FLASHLIGHT", "POWER", "MONITOR", "SCAN",
                    "MODE", "BL_MIN_TMP_OFF", "PTT", "WIDE / NARROW",
                    "BACKLIGHT", "MUTE", "RxA", "ScanLst Up", "ScanLst Dw",
                    "RXMOD", "SCAN ALL", "RESERVED 21", "RESERVED 22", "PTT 2", "VFO A/B",
-                   "HISTORY", "VOX", "REVERSE FQ", "MESSAGES", "FMESSAGE"]
+                   "HISTORY", "VOX", "REVERSE FQ", "MESSAGES", "FMESSAGE", "BAND SCAN"]
 # Same assignable actions as the v1.0 radio menu; legacy functional actions
 # (1750, BACKLIGHT and RxA) are retained when already assigned.
-KEYACTIONS_SUPPORTED = [0, 1, 2, 3, 4, 6, 8, 9, 10, 12, 13, 17, 18, 19, 20, 23, 24, 25, 26, 27, 28, 29]
+KEYACTIONS_SUPPORTED = [0, 1, 2, 3, 4, 6, 8, 9, 10, 12, 13, 17, 18, 19, 20, 23, 24, 25, 26, 27, 28, 29, 30]
 KEYACTIONS_LEGACY = [7, 14, 16]
 SCAN_SQL_LIST = [f"{v} dbm" for v in range(-130, -52)]
 SCAN_HYS_LIST = [f"{v} dbm" for v in range(9)]
@@ -789,10 +789,11 @@ def _sayhello(serport):
         raise errors.RadioError("Radio is in programming mode, "
                                 "restart radio into normal mode")
     firmware = _getstring(rep, 4, 24)
-    if firmware != "FALCON 7.0/3.1K":
+    releases = {"FALCON 7.0/3.2K": "FALCON 1K 3.2.0", "FALCON 7.0/3.1K": "FALCON 1K 3.1.1"}
+    if firmware not in releases:
         raise errors.RadioError("This driver is for Falcon 1K (3.1.1 or later). "
                                 "For Falcon 4K, select the UV-K1 / UV-K5 V3 Falcon 4K driver.")
-    firmware = "FALCON 1K 3.1.1"
+    firmware = releases[firmware]
     # The v7 prefix selects 64 Apps in UVStudio; present the Falcon release here.
     if firmware == "FALCON 7.0/3.1":
         firmware = "FALCON 3.1.0"
@@ -1018,7 +1019,7 @@ def list_def(value, lst, default):
 class UVK5RadioEgzumer(chirp_common.CloneModeRadio):
     """Quansheng UV-K1 running Falcon firmware."""
     VENDOR = "Quansheng"
-    MODEL = "UV-K1 / UV-K5 V3 Falcon 1K v3.1.1"
+    MODEL = "UV-K1 / UV-K5 V3 Falcon 1K v3.2.0"
     BAUD_RATE = 38400
     NEEDS_COMPAT_SERIAL = False
     FIRMWARE_VERSION = ""
@@ -1047,7 +1048,7 @@ class UVK5RadioEgzumer(chirp_common.CloneModeRadio):
         return self.FIRMWARE_VERSION
 
     def _supports_navigation(self):
-        return any(v in self._version_string() for v in ("2.0.1", "2.2.0", "2.2.1", "2.3.0", "2.3.1", "3.0.0", "3.1.0", "3.1.1", "1.2.1-SE", "1.3.0"))
+        return any(v in self._version_string() for v in ("2.0.1", "2.2.0", "2.2.1", "2.3.0", "2.3.1", "3.0.0", "3.1.0", "3.1.1", "3.2.0", "1.2.1-SE", "1.3.0"))
 
     def _is_legacy_battery(self):
         return "1.1.6" in self._version_string()
@@ -1887,7 +1888,7 @@ class UVK5RadioEgzumer(chirp_common.CloneModeRadio):
     def get_settings(self):
         _mem = self._memobj
 
-        ValFirm = "Firmware : Falcon 1K v3.1.1"
+        ValFirm = "Firmware : Falcon 1K v3.2.0"
 
   
         radio_firmware = RadioSettingGroup("radio_firmwarebasic", ValFirm)

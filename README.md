@@ -1,4 +1,4 @@
-# Falcon v3.1.1-OA
+# Falcon v3.2.0-OA
 
 **English** | [Français](README.fr.md) | [Español](README.es.md)
 
@@ -6,20 +6,20 @@ Firmware for UV-K1 / K5(v3), derived from Sonic and compatible with F4HWN (64 ap
 
 - Clear screens, Keys Infos help on F (#), and two scan speeds: Normal for reliable detection (~300 channels/s) and FastScan to sweep many channels quickly (~500 channels/s).
 - Full Watch follows both VFOs and up to four priority channels; Multilist Watch scans your memory lists in the background.
-- Scan straight from the VFO: Long * scans the channel's list, F + * scans all channels in FastScan, and with A and B in frequency mode, Long * scans the range between them, keeping the VFO display.
-- Spectrum and Sentinel scan lists, bands or ranges, with a History of up to 200 detections and blacklists.
+- Scan straight from the VFO: Long * scans the channel's list, F + * scans all channels in FastScan, with A and B in frequency mode Long * scans the range between them, and the BAND SCAN shortcut scans a saved band, keeping the VFO display.
+- Spectrum and Sentinel scan lists, bands or ranges, with a History of up to 200 detections and blacklists; Spectrum adds a waterfall (key 8) and a zoom around the last reception (key 4).
 - Channels, lists and bands can be created and edited directly from the keypad.
 - Falcon apps: FMessage sends and receives 64-character FSK text messages between radios; messages are saved on the radio, accessible from the VFO (MESSAGES shortcut) or with the FMessage app (VFO shortcut also available). It sends a call with a melody and shows which radios are present with the app open (melody and callsign set in FMessageOption); each radio that acknowledged the last message is marked with a +. FCatch (Close Call capture) for VHF and UHF signals, FirstAid, FSurvival and FMorse for emergency situations, FGuide (firmware keys and shortcuts guide), FSystemInfo, and FSnake (open walls, keys 3/7 for both directions) complete the F4HWN catalogue.
 - One-file install, multiboot with Sonic and F4HWN (apps supported), and two editions: Falcon 4K (4096 channels) and Falcon 1K (1024 channels with their own settings).
 - Falcon firmware is coded using Claude Code.
 
-**User guide (EN): [docs/Falcon_v3.1.1_User_Guide_EN.pdf](docs/Falcon_v3.1.1_User_Guide_EN.pdf)**. The guide of each version is also attached to the [Releases](../../releases).
+**User guide (EN): [docs/Falcon_v3.2.0_User_Guide_EN.pdf](docs/Falcon_v3.2.0_User_Guide_EN.pdf)**. The guide of each version is also attached to the [Releases](../../releases).
 
 ## Contents
 
-- `firmware/Falcon4K_v3.1.1-OA.bin`: firmware and all-in-one automatic installer (3.1.1: an app can save a block of its own data, used by FCatch).
-- `firmware/Falcon1K_v3.1.1-OA.bin`: Falcon 1K, the same version with 1024 channels kept in its own slot's settings (F4HWN layout). In multiboot with Sonic 4K, each one keeps its own settings and channels. Falcon 4K shares its 4096 channels with Sonic 4K.
-- `Falcon apps/FGuide.app`: Falcon key reference on the radio (10 sections, in English).
+- `firmware/Falcon4K_v3.2.0-OA.bin`: firmware and all-in-one automatic installer (3.2.0: Spectrum waterfall and zoom, BAND SCAN shortcut, lighter VFO scans; full changelog on the first page of the user guide).
+- `firmware/Falcon1K_v3.2.0-OA.bin`: Falcon 1K, the same version with 1024 channels kept in its own slot's settings (F4HWN layout). In multiboot with Sonic 4K, each one keeps its own settings and channels. Falcon 4K shares its 4096 channels with Sonic 4K.
+- `Falcon apps/FGuide.app`: Falcon key reference on the radio (10 sections, in English), version 1.1 for Falcon 3.2.0.
 - `Falcon apps/FSystemInfo.app`: Falcon system information (firmware, memory, stack, battery, identity).
 - `Falcon apps/FCatch.app`: Close Call capture of nearby transmitters, with tone, memory channel name, VHF / UHF / VHF+UHF choice, frequency blocking (SK2) and a saved 17-entry history (Falcon 3.1.1 or later).
 - `Falcon apps/FirstAid.app`: first aid steps (ERC 2025) and CPR metronome.
@@ -29,8 +29,8 @@ Firmware for UV-K1 / K5(v3), derived from Sonic and compatible with F4HWN (64 ap
 - `Falcon apps/Translations`: FirstAid and FSurvival in French (FR), Spanish (ES) and Polish (PL).
 - `Falcon apps/FMessage.app` and `Falcon apps/FMessageOption.app`: messaging between radios (FMessage 3.0) and its settings ("FMessOption" in the apps list). Install both.
 - `F4WHN apps`: the 46 official F4HWN apps available (version 6.3.0), optional.
-- `chirp/falcon4k.chirp.v3.1.1.py`: Falcon 4K CHIRP driver (formerly `falcon.chirp.v3.1.0.py`), with the four priority channels, SetRxG and the REVERSE FQ, MESSAGES and FMESSAGE shortcuts.
-- `chirp/falcon1k.chirp.v3.1.1.py`: Falcon 1K CHIRP driver (memories 995 to 1024: the bands). Each driver refuses the other edition.
+- `chirp/falcon4k.chirp.v3.2.0.py`: Falcon 4K CHIRP driver, with the four priority channels, SetRxG and the REVERSE FQ, MESSAGES, FMESSAGE and BAND SCAN shortcuts.
+- `chirp/falcon1k.chirp.v3.2.0.py`: Falcon 1K CHIRP driver (memories 995 to 1024: the bands). Each driver refuses the other edition.
 - `sources/runtime`: complete firmware sources, drivers and embedded dependencies.
 - `sources/installer`: sources of the temporary installer (it reuses the drivers of `sources/runtime`).
 - `sources/fguide`, `sources/fsysteminfo`: sources of FGuide and FSystemInfo.
@@ -48,7 +48,7 @@ To keep the main firmware: boot that firmware, open Firmware Slots in UVStudio, 
 
 To replace the main firmware: use Firmware Flash / DFU with the same BIN.
 
-At first start, let the "FALCON v3.1.1" and "Powering Up" install screen finish its work until the automatic restart. Do not cut the power during the install; an interrupted install is resumed at the next start, in the same slot. No "Install assets" click is needed.
+At first start, let the "FALCON v3.2.0" and "Powering Up" install screen finish its work until the automatic restart. Do not cut the power during the install; an interrupted install is resumed at the next start, in the same slot. No "Install assets" click is needed.
 
 If the install screen shows `S 04 E 10`, the install was refused without erasing anything: the Falcon area holds apps written by another firmware (app slots 80 to 99 of a future F4HWN). Press PTT to restore the main firmware.
 

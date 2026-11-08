@@ -19,7 +19,7 @@ def request(port,cmd,data):
  reply,length=struct.unpack_from('<HH',body)
  assert size==length+4
  return reply,body[4:]
-# Falcon 1K answers 3.1K and has no CHIRP 4K channel window (0x122000).
+# Falcon 1K answers 3.2K and has no CHIRP 4K channel window (0x122000).
 k1=B.name=='S1K'
 reads=[]
 def rec(a,p,n,*x):reads.append(a);rd(a,p,n)
@@ -30,7 +30,7 @@ summary=[]
 for port in [0,1]:
  reply,data=request(port,0x0514,struct.pack('<I',0x12345678))
  assert reply==0x0515
- name=data[:16].split(b'\0')[0].decode();assert name==('FALCON 7.0/3.1K' if k1 else 'FALCON 7.0/3.1'),name
+ name=data[:16].split(b'\0')[0].decode();assert name==('FALCON 7.0/3.2K' if k1 else 'FALCON 7.0/3.2'),name
  for offset,physical in [(0x000010,0x000010),(0x122010,0x122010 if k1 else 0x1DE010)]:
   reads.clear();reply,data=request(port,0x051B,struct.pack('<IBB',offset,16,0)+bytes(2)+struct.pack('<I',0x12345678))
   assert reply==0x051C and reads==[physical],(hex(offset),[hex(r) for r in reads])

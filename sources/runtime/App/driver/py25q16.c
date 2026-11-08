@@ -389,8 +389,10 @@ static void ResumeNative(void)
     APP_NativeResume();
 }
 
+uint8_t gFlashWrites; // counts writes: a cached flash lookup knows it may be stale
 void PY25Q16_WriteBuffer(uint32_t Address, const void *pBuffer, uint32_t Size, bool Append)
 {
+    ++gFlashWrites;
     /* Data held in the overlay RAM itself (a module constant) is copied out
      * in small pieces first: the sector cache is about to be reused. */
     const uint8_t *src = pBuffer;

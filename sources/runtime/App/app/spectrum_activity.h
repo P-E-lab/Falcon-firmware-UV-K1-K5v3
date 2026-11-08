@@ -6,10 +6,24 @@
 #include <stdbool.h>
 #include <string.h>
 #define ACTIVITY_TOP         16
-#define ACTIVITY_BOTTOM      39
+#define ACTIVITY_BOTTOM      activityBottom
 #define ACTIVITY_LEFT        0
 #define ACTIVITY_WIDTH       (128 - ACTIVITY_LEFT)
-#define ACTIVITY_LIST_BOTTOM 39
+#define ACTIVITY_LIST_BOTTOM activityBottom
+
+// Waterfall (Spectre, key 8): the plot ends higher and 16 rows below it show
+// the recent sweeps. The rows are kept as they are drawn (frame-buffer pages
+// 4 and 5, newest on top), so the three levels cost 256 bytes: nothing for the
+// noise, a light dither for a weak signal, solid above the squelch.
+#define ACTIVITY_PLOT_BOTTOM      39
+#define ACTIVITY_WATERFALL_BOTTOM 30
+static uint8_t activityBottom = ACTIVITY_PLOT_BOTTOM;
+static bool waterfallOn, waterfallRow;
+static uint8_t waterfallCount;
+// Columns measured since the last row: only they are drawn (the last column of
+// a range is never measured and would otherwise keep a stale value forever).
+static uint8_t waterfallSeen[16];
+static uint8_t waterfall[2][128] __attribute__((section(".app_scratch"), aligned(4)));
 
 typedef struct {
     uint16_t samples[128];
@@ -81,6 +95,7 @@ static bool ActivityValid(uint16_t rssi)
 static void ActivityReset(SpectrumActivity *v, uint32_t start, uint32_t stop, uint8_t mode, uint32_t now)
 {
     memset(v, 0, sizeof(*v));
+    memset(waterfall, 0, sizeof waterfall);
     v->start = start;
     v->stop = stop;
     v->mode = mode;
@@ -112,12 +127,14 @@ static void ActivityRecord(SpectrumActivity *v, unsigned x, uint16_t rssi)
         v->samples[x] = rssi;
     }
     v->sampled[x >> 3] |= mask;
+    waterfallSeen[x >> 3] |= mask;
 }
 static void ActivityFinishSweep(SpectrumActivity *v, uint32_t now)
 {
     (void)now;
     if (!v->initialized)
         return;
+    waterfallRow = true;
     // Estimate background from the lower fifth of a completed scan.
     // A flat PMR noise floor can rise; it is not mistaken for activity forever.
     uint8_t histogram[64] = {0};

@@ -339,12 +339,17 @@ void CHANNEL_DrawParametersHelp(void)
     static const char *const lines[] = {"< >: NEXT FIELD", "1/3: NEXT VALUE", "EXIT: SAVE & EXIT"};
     EditorKeysPopup(lines, 3, true);
 }
-void CHANNEL_DrawSelectionHelp(bool band)
+void CHANNEL_DrawSelectionHelp(uint8_t kind) // 0 lists, 1 bands, 2 BAND SCAN pick
 {
-    const char *const lines[] = {band ? "4: SELECT BAND" : "4: SELECT LIST", "M: SELECT & START",
-                                 band ? "M LONG: BAND OPTIONS" : "M LONG: LIST OPTIONS", "*: SELECT ALL",
+    static const char *const pick[] = {"< >: CHOOSE BAND", "M: START SCAN", "M LONG: BAND OPTIONS",
+                                       "EXIT: BACK TO VFO"};
+    const char *const lines[] = {kind ? "4: SELECT BAND" : "4: SELECT LIST", "M: SELECT & START",
+                                 kind ? "M LONG: BAND OPTIONS" : "M LONG: LIST OPTIONS", "*: SELECT ALL",
                                  "EXIT: START SCAN"};
-    EditorKeysPopup(lines, 5, false);
+    if (kind == 2)
+        EditorKeysPopup(pick, 4, false);
+    else
+        EditorKeysPopup(lines, 5, false);
 }
 // Seven lines: the same box rises over the status line (screen rows 0..58).
 static void EditorKeysPopupTall(const char *const *lines, uint8_t count)

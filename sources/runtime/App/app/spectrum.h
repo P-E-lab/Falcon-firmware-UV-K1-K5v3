@@ -145,6 +145,11 @@ bool APP_MLWatchEligible(void);
 void APP_RunMLWatch(void);
 VFO_Info_t *APP_GetMLWatchDisplayVfo(uint8_t vfo);
 void APP_RunVfoScanRange(void);
+void APP_RunBandScan(void);
+uint16_t APP_MemoryOnFrequency(uint32_t freq);
+bool APP_VfoScanListening(void);
+const char *APP_ScanBandName(void);
+uint32_t APP_ScanLastRx(void);
 void APP_RunSpectrumMode(Mode mode); // 0=FREQ, 1=SCANLIST, 2=RANGE, 3=BAND
 void ClearSettings(void);
 void LoadSettings(void);

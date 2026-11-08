@@ -1,4 +1,4 @@
-# Falcon v3.1.1-OA
+# Falcon v3.2.0-OA
 
 [English](README.md) | **Français** | [Español](README.es.md)
 
@@ -6,20 +6,20 @@ Firmware pour UV-K1 / K5(v3), dérivé de Sonic et compatible avec F4HWN (64 emp
 
 - Écrans clairs, aide Keys Infos sur F (#), et deux vitesses de scan : Normal pour une détection fiable (~300 canaux/s) et FastScan pour balayer rapidement beaucoup de canaux (~500 canaux/s).
 - Full Watch suit les deux VFO et jusqu'à quatre canaux prioritaires ; Multilist Watch scanne vos listes mémoire en arrière-plan.
-- Scan directement depuis le VFO : Long * scanne la liste du canal, F + * scanne tous les canaux en FastScan, et avec A et B en mode fréquence, Long * scanne la plage entre les deux, en gardant l'affichage du VFO.
-- Le Spectre et la Sentinelle scannent des listes, des bandes ou des plages, avec un historique de 200 détections et des listes noires.
+- Scan directement depuis le VFO : Long * scanne la liste du canal, F + * scanne tous les canaux en FastScan, avec A et B en mode fréquence Long * scanne la plage entre les deux, et le raccourci BAND SCAN scanne une bande enregistrée, en gardant l'affichage du VFO.
+- Le Spectre et la Sentinelle scannent des listes, des bandes ou des plages, avec un historique de 200 détections et des listes noires ; le Spectre ajoute une cascade (touche 8) et un zoom autour de la dernière réception (touche 4).
 - Canaux, listes et bandes peuvent être créés et modifiés directement au clavier.
 - Apps Falcon : FMessage envoie et reçoit des messages texte de 64 caractères en FSK entre radios ; les messages sont enregistrés dans la radio, accessibles depuis le VFO (raccourci MESSAGES) ou avec l'app FMessage (raccourci depuis le VFO aussi disponible). Il envoie un appel avec une mélodie et montre les radios présentes avec l'app ouverte (mélodie et indicatif réglés dans FMessageOption) ; chaque radio qui a accusé réception du dernier message est marquée d'un +. FCatch (capture Close Call) pour les signaux VHF et UHF, FirstAid, FSurvival et FMorse pour les situations d'urgence, FGuide (guide des touches et raccourcis du firmware), FSystemInfo, et FSnake (murs ouverts, touches 3/7 pour les deux sens) complètent le catalogue F4HWN.
 - Installation en un fichier, multiboot avec Sonic et F4HWN (apps acceptées), et deux éditions : Falcon 4K (4096 canaux) et Falcon 1K (1024 canaux avec leurs propres réglages).
 - Le firmware Falcon est codé avec Claude Code.
 
-**Guide utilisateur (FR) : [docs/Falcon_v3.1.1_User_Guide_FR.pdf](docs/Falcon_v3.1.1_User_Guide_FR.pdf)**. Les guides de chaque version sont aussi joints aux [Releases](../../releases).
+**Guide utilisateur (FR) : [docs/Falcon_v3.2.0_User_Guide_FR.pdf](docs/Falcon_v3.2.0_User_Guide_FR.pdf)**. Les guides de chaque version sont aussi joints aux [Releases](../../releases).
 
 ## Contenu
 
-- `firmware/Falcon4K_v3.1.1-OA.bin` : firmware et installateur automatique tout-en-un (3.1.1 : une app peut sauvegarder un bloc de ses propres données, utilisé par FCatch).
-- `firmware/Falcon1K_v3.1.1-OA.bin` : Falcon 1K, la même version avec 1024 canaux rangés dans les réglages propres à son slot (format F4HWN). En multiboot avec Sonic 4K, chacun garde ses réglages et ses canaux. La Falcon 4K, elle, partage ses 4096 canaux avec Sonic 4K.
-- `Falcon apps/FGuide.app` : mémo des touches de Falcon sur la radio (10 rubriques, en anglais).
+- `firmware/Falcon4K_v3.2.0-OA.bin` : firmware et installateur automatique tout-en-un (3.2.0 : cascade et zoom du Spectre, raccourci BAND SCAN, scans VFO allégés ; changelog complet en première page du guide).
+- `firmware/Falcon1K_v3.2.0-OA.bin` : Falcon 1K, la même version avec 1024 canaux rangés dans les réglages propres à son slot (format F4HWN). En multiboot avec Sonic 4K, chacun garde ses réglages et ses canaux. La Falcon 4K, elle, partage ses 4096 canaux avec Sonic 4K.
+- `Falcon apps/FGuide.app` : mémo des touches de Falcon sur la radio (10 rubriques, en anglais), version 1.1 pour Falcon 3.2.0.
 - `Falcon apps/FSystemInfo.app` : informations système de Falcon (firmware, mémoire, pile, batterie, identité).
 - `Falcon apps/FCatch.app` : capture des émetteurs proches (Close Call) avec tonalité, nom du canal mémoire, choix VHF / UHF / VHF+UHF, blocage des fréquences (SK2) et historique de 17 entrées sauvegardé (Falcon 3.1.1 ou plus).
 - `Falcon apps/FirstAid.app` : gestes de premiers secours (ERC 2025) et métronome de RCP.
@@ -29,8 +29,8 @@ Firmware pour UV-K1 / K5(v3), dérivé de Sonic et compatible avec F4HWN (64 emp
 - `Falcon apps/Translations` : FirstAid et FSurvival en français (FR), espagnol (ES) et polonais (PL).
 - `Falcon apps/FMessage.app` et `Falcon apps/FMessageOption.app` : messagerie entre radios (FMessage 3.0) et ses réglages (« FMessOption » dans la liste des apps). Les installer ensemble.
 - `F4WHN apps` : les 46 applications officielles F4HWN disponibles (version 6.3.0), optionnelles.
-- `chirp/falcon4k.chirp.v3.1.1.py` : pilote CHIRP de la Falcon 4K (anciennement `falcon.chirp.v3.1.0.py`), avec les quatre canaux prioritaires, SetRxG et les raccourcis REVERSE FQ, MESSAGES et FMESSAGE.
-- `chirp/falcon1k.chirp.v3.1.1.py` : pilote CHIRP de la Falcon 1K (mémoires 995 à 1024 : les bandes). Chaque pilote refuse l'autre édition.
+- `chirp/falcon4k.chirp.v3.2.0.py` : pilote CHIRP de la Falcon 4K, avec les quatre canaux prioritaires, SetRxG et les raccourcis REVERSE FQ, MESSAGES, FMESSAGE et BAND SCAN.
+- `chirp/falcon1k.chirp.v3.2.0.py` : pilote CHIRP de la Falcon 1K (mémoires 995 à 1024 : les bandes). Chaque pilote refuse l'autre édition.
 - `sources/runtime` : sources complètes du firmware, pilotes et dépendances embarquées.
 - `sources/installer` : sources de l'installateur temporaire (il réutilise les pilotes de `sources/runtime`).
 - `sources/fguide`, `sources/fsysteminfo` : sources de FGuide et FSystemInfo.
@@ -48,7 +48,7 @@ Pour conserver le firmware principal : démarrer ce firmware, ouvrir Firmware Sl
 
 Pour remplacer le firmware principal : utiliser Firmware Flash / DFU avec le même BIN.
 
-Au premier lancement, laisser l'écran d'installation « FALCON v3.1.1 » et « Powering Up » terminer son travail jusqu'au redémarrage automatique. Ne pas couper l'alimentation pendant l'installation ; une coupure est toutefois reprise au démarrage suivant, dans le même slot. Aucun clic « Installer les assets » n'est nécessaire.
+Au premier lancement, laisser l'écran d'installation « FALCON v3.2.0 » et « Powering Up » terminer son travail jusqu'au redémarrage automatique. Ne pas couper l'alimentation pendant l'installation ; une coupure est toutefois reprise au démarrage suivant, dans le même slot. Aucun clic « Installer les assets » n'est nécessaire.
 
 Si l'écran d'installation affiche `S 04 E 10`, l'installation a été refusée sans rien effacer : la zone de Falcon contient des applications écrites par un autre firmware (emplacements Apps 80 à 99 d'un futur F4HWN). Appuyer sur PTT restaure le firmware principal.
 

@@ -20,7 +20,7 @@ bool CHANNEL_TakeResult(uint16_t *from, uint16_t *to, bool *list);
 void CHANNEL_ProcessKeys(KEY_Code_t key, bool pressed, bool held);
 void CHANNEL_Display(void);
 
-void CHANNEL_DrawSelectionHelp(bool band);
+void CHANNEL_DrawSelectionHelp(uint8_t kind);
 void CHANNEL_DrawHistoryHelp(bool messages);
 void CHANNEL_DrawParametersHelp(void);
 void CHANNEL_DrawKeysInfos(void);

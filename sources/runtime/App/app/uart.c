@@ -246,12 +246,12 @@ static void SendReply(uint32_t Port, void *pReply, uint16_t Size)
 #endif
 }
 
-/* Falcon 1K answers "3.1K": its channels are not at the 4K driver's
+/* Falcon 1K answers "3.2K": its channels are not at the 4K driver's
  * addresses, so each CHIRP driver accepts only its own edition. */
 #ifdef ENABLE_1024
-#define FALCON_HELLO "FALCON 7.0/3.1K"
+#define FALCON_HELLO "FALCON 7.0/3.2K"
 #else
-#define FALCON_HELLO "FALCON 7.0/3.1"
+#define FALCON_HELLO "FALCON 7.0/3.2"
 #endif
 
 static void SendVersion(uint32_t Port)

@@ -1,4 +1,4 @@
-# FGuide text: the 10 key reference sections of the Falcon 4K v3.0.0 guide (MESSAGES replaces JOURNAL),
+# FGuide text: the 10 key reference sections of the Falcon 4K v3.2.0 guide (MESSAGES replaces JOURNAL),
 # shortened in the radio's Keys Infos style. Uppercase ASCII only (3x5 font).
 # Each section: (home label, page title, [(key, description), ...]).
 # Lines read "KEY: DESCRIPTION", wrapped, as in the Keys Infos popups.
@@ -6,7 +6,7 @@ SECTIONS = [
     ("VFO KEYS", "VFO KEYS", [
         ("0-9", "FREQ OR CH NUMBER. 6 DIGITS = XXX.XXX MHZ"),
         ("* ENTRY", "DECIMAL POINT"),
-        ("< >", "FREQ MODE: STEP UP/DOWN. MEMORY: CH BY LIST"),
+        ("< >", "FREQ MODE: STEP UP/DOWN. MEMORY: CH BY LIST, THEN NONE, MONI"),
         ("MENU", "MAIN MENU. IN ENTRY: CONFIRM FREQ"),
         ("EXIT", "DELETE LAST DIGIT"),
         ("LONG EXIT", "NEW FREQ ENTRY"),
@@ -56,7 +56,7 @@ SECTIONS = [
         ("MODE", "MODULATION"),
         ("PTT TOGGLE", "PTT HELD / PTT PRESS ON, PRESS OFF"),
         ("WIDE NARROW", "WIDE / NARROW"),
-        ("SCANLST UP/DW", "NEXT / PREVIOUS MEMORY LIST"),
+        ("SCANLST UP/DW", "NEXT / PREV LIST, THEN NONE, MONI, BAND"),
         ("RXMOD", "SINGLE, DUAL, FULL WATCH, ML WATCH"),
         ("SCAN", "SAME AS LONG *"),
         ("SCAN ALL", "SAME AS F+*"),
@@ -66,19 +66,22 @@ SECTIONS = [
         ("FMESSAGE", "OPEN THE FMESSAGE APP"),
         ("VOX", "VOX ON/OFF"),
         ("REVERSE FQ", "RX ON TX FREQ, TX ON RX FREQ"),
+        ("BAND SCAN", "PICK A BAND, SCAN IT ON THE ACTIVE VFO"),
         ("VFO A/B", "VFO A/B (NOT FOR M LONG)"),
     ]),
     ("SPECTRE SENTINEL", "SCANNER KEYS", [
         ("1", "SKIP THIS RX"),
         ("2", "BACKLIGHT ON/OFF"),
         ("3", "NORMAL / FAST SCAN"),
+        ("4", "ZOOM AROUND THE LAST RX (BAND, RANGE)"),
         ("5", "FREQ DETAILS"),
         ("6", "LIST / BAND / RANGE"),
         ("7", "SAVE SCAN SETTINGS"),
+        ("8", "WATERFALL ON/OFF"),
         ("9", "HISTORY"),
         ("0", "SESSION MODULATION"),
         ("* / F", "SQUELCH UP / DOWN. SPECTRE: DBM. SENTINEL: RELATIVE"),
-        ("< >", "PREV/NEXT LIST OR BAND. RANGE: SHIFT RANGE"),
+        ("< >", "PREV/NEXT LIST OR BAND. RANGE, ZOOM: SHIFT"),
         ("SK1", "NORMAL / FREQ LOCK / MONITOR"),
         ("SK2", "BLACKLIST RX FREQ"),
         ("MENU", "LIST/BAND SELECT. RANGE: RANGE EDITOR"),
