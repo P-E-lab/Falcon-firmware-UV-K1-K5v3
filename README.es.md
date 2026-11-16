@@ -1,6 +1,6 @@
 # Falcon v3.2.0-OA
 
-[English](README.md) | [Français](README.fr.md) | **Español**
+[English](README.md) | [Français](README.fr.md) | **Español** | [Русский](README.ru.md)
 
 Firmware para UV-K1 / K5(v3), derivado de [Sonic](https://github.com/Robby69400/Sonic) y compatible con [F4HWN](https://github.com/armel/uv-k1-k5v3-firmware-custom) (64 slots de apps).
 
