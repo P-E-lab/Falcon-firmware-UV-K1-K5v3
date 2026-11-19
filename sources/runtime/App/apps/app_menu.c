@@ -372,6 +372,10 @@ static NATIVE_CODE(boot) uint8_t app_select(bool wait_release)
     /* Right column: the code size, or the version after KEY_STAR. Kept across
      * menu openings, back to the size at power-on. */
     static bool show_version = false;
+    /* Direct selection as in F4HWN v7: a digit selects the app of that shown
+     * number, a second digit within one second a two-digit number. */
+    uint8_t digit = KEY_INVALID;
+    uint32_t digit_tick = 0u;
     if (wait_release)
         app_wait_release();
 
@@ -405,6 +409,26 @@ static NATIVE_CODE(boot) uint8_t app_select(bool wait_release)
         const KEY_Code_t key = app_get_key();
         if (key == KEY_EXIT)
             return UINT8_MAX;
+        if (key <= KEY_9) {
+            const uint32_t now = gGlobalSysTickCounter;
+            uint8_t index = installed_count;
+            if (digit != KEY_INVALID && (uint32_t)(now - digit_tick) < 100u) {
+                const uint8_t number = (uint8_t)(digit * 10u + key);
+                if (number > 0u)
+                    index = app_find_slot(installed_slots, installed_count, (uint8_t)(number - 1u));
+            }
+            if (index < installed_count)
+                digit = KEY_INVALID; /* a pair is complete */
+            else {
+                if (key != KEY_0)
+                    index = app_find_slot(installed_slots, installed_count, (uint8_t)(key - KEY_1));
+                digit = (uint8_t)key; /* even an empty slot can start a pair */
+                digit_tick = now;
+            }
+            if (index < installed_count)
+                sel = index;
+        } else
+            digit = KEY_INVALID;
 
         switch (gSetting_nav_invert && (key == KEY_UP || key == KEY_DOWN)
                     ? (key == KEY_UP ? KEY_DOWN : KEY_UP)
