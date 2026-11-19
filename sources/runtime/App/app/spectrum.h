@@ -42,6 +42,12 @@
 #define ADRESS_VERSION 0xC010
 #define ADRESS_PARAMS  0xC020
 #define ADRESS_HISTORY 0xD000
+/* Reserved for the future FKeys app (and CHIRP): the key tables, in their own
+ * 4 KiB sector of the slot's config bank, after the scanner history. Header
+ * "FKY1" + format version; erased (0xFF) means the default keys everywhere.
+ * Nothing reads or writes it yet; a full factory reset erases it. */
+#define ADRESS_FKEYS   0xE000
+#define FKEYS_SIZE     0x1000
 
 
 typedef enum { AUTOLOCK_OFF, AUTOLOCK_10S, AUTOLOCK_20S, AUTOLOCK_30S } AUTOLOCK_t;
@@ -128,6 +134,7 @@ uint8_t APP_GetScanningVfo(void); // UINT8_MAX outside a VFO scan.
 void APP_RunSpectrum(void);
 void APP_RunScanner(Mode mode, bool sentinel);
 void APP_RunSentinel(void);
+void APP_RunSpectreVfo(void);
 void APP_RunHistory(void);
 void APP_RunMessages(void);
 #define SCAN_VFO_FREQUENCY 0x40u
@@ -135,6 +142,14 @@ void APP_RunCurrentScanList(uint8_t list);
 void APP_RunAllMemoryScan(void);
 extern uint8_t gVfoScanSQL, gSpectrumSQL, gScanSQLHys;
 extern uint16_t gScanSqlPreview;
+/* General menu: the VFO scans' own NoiLvOf, MaxRX, RxHold and ScanPS (Spectre
+ * and Sentinel keep theirs), and PopTim, the popup time of every scan. */
+extern uint8_t gScanNoiLvOf, gScanMaxRx, gScanRxHold, gScanPS, gPopTim;
+#define SCAN_MAXRX_COUNT  10
+#define SCAN_RXHOLD_COUNT 14
+#define SCAN_PS_COUNT     6
+#define SCAN_POPTIM_COUNT 6
+void APP_ScanMenuText(char *s, uint8_t menuId, uint8_t value);
 void APP_LoadScanSQL(void);
 void APP_SaveScanSQL(void);
 void APP_AdjustScanSQL(int direction);

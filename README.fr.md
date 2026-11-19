@@ -1,4 +1,4 @@
-# Falcon v3.2.0-OA
+# Falcon v4.0.0
 
 [English](README.md) | **Français** | [Español](README.es.md) | [Русский](README.ru.md)
 
@@ -8,20 +8,26 @@ Firmware pour UV-K1 / K5(v3), dérivé de [Sonic](https://github.com/Robby69400/
 - Full Watch suit les deux VFO et jusqu'à quatre canaux prioritaires ; Multilist Watch scanne vos listes mémoire en arrière-plan.
 - Scan directement depuis le VFO : Long * scanne la liste du canal, F + * scanne tous les canaux en FastScan, avec A et B en mode fréquence Long * scanne la plage entre les deux, et le raccourci BAND SCAN scanne une bande enregistrée, en gardant l'affichage du VFO.
 - Le Spectre et la Sentinelle scannent des listes, des bandes ou des plages, avec un historique de 200 détections et des listes noires ; le Spectre ajoute une cascade (touche 8) et un zoom autour de la dernière réception (touche 4).
+- SKIP MEM (touche 7) cache les fréquences déjà en mémoire dans le Spectre et la Sentinelle ; SPECTRE VFO ouvre le Spectre autour de la fréquence du VFO ; le processeur s'endort entre deux tâches pour une meilleure autonomie.
 - Canaux, listes et bandes peuvent être créés et modifiés directement au clavier.
 - Apps Falcon : FMessage envoie et reçoit des messages texte de 64 caractères en FSK entre radios ; les messages sont enregistrés dans la radio, accessibles depuis le VFO (raccourci MESSAGES) ou avec l'app FMessage (raccourci depuis le VFO aussi disponible). Il envoie un appel avec une mélodie et montre les radios présentes avec l'app ouverte (mélodie et indicatif réglés dans FMessageOption) ; chaque radio qui a accusé réception du dernier message est marquée d'un +. FCatch (capture Close Call) pour les signaux VHF et UHF, FirstAid, FSurvival et FMorse pour les situations d'urgence, FGuide (guide des touches et raccourcis du firmware), FSystemInfo, et FSnake (murs ouverts, touches 3/7 pour les deux sens) complètent le catalogue F4HWN.
+- POCSAG Scan (1200 / 512 bauds, 512 caractères, journal dans l'Historique) et FKeys (réattribution des touches longues et F+) rejoignent les apps Falcon ; l'API des apps passe au niveau 4, compatible F4HWN v7.
 - Installation en un fichier, multiboot avec Sonic et F4HWN (apps acceptées), et deux éditions : Falcon 4K (4096 canaux) et Falcon 1K (1024 canaux avec leurs propres réglages).
 - Le firmware Falcon est codé avec Claude Code.
 
-**Guide utilisateur (FR) : [docs/Falcon_v3.2.0_User_Guide_FR.pdf](docs/Falcon_v3.2.0_User_Guide_FR.pdf)**. Les guides de chaque version sont aussi joints aux [Releases](../../releases).
+**Guide utilisateur (FR) : [docs/Falcon_v4.0.0_User_Guide_FR.pdf](docs/Falcon_v4.0.0_User_Guide_FR.pdf)**. Les guides de chaque version sont aussi joints aux [Releases](../../releases).
+
+**Compatibilité (4.0.0) :** la V4 change l'organisation de la mémoire externe. Sur une même radio, tous les Falcon installés en multiboot doivent passer en V4 ensemble ; un Falcon 3.x dans un autre slot perdrait ses modules. Les apps POCSAG Scan, FCatch, FKeys et FMessage doivent être mises à jour avec la V4. Les canaux et réglages sont conservés ; utiliser les pilotes CHIRP 4.0.0.
 
 ## Contenu
 
-- `firmware/Falcon4K_v3.2.0-OA.bin` : firmware et installateur automatique tout-en-un (3.2.0 : cascade et zoom du Spectre, raccourci BAND SCAN, scans VFO allégés ; changelog complet en première page du guide).
-- `firmware/Falcon1K_v3.2.0-OA.bin` : Falcon 1K, la même version avec 1024 canaux rangés dans les réglages propres à son slot (format F4HWN). En multiboot avec Sonic 4K, chacun garde ses réglages et ses canaux. La Falcon 4K, elle, partage ses 4096 canaux avec Sonic 4K.
-- `Falcon apps/FGuide.app` : mémo des touches de Falcon sur la radio (10 rubriques, en anglais), version 1.1 pour Falcon 3.2.0.
+- `firmware/f4hwn.falcon-4k.v4.0.0.bin` : firmware et installateur automatique tout-en-un (4.0.0 : SKIP MEM, SPECTRE VFO, sommeil du processeur, API des apps niveau 4, page POCSAG, 30 listes ; changelog complet en première page du guide). Le nom du fichier donne « Falcon 4k » dans la liste multiboot d'UV Studio.
+- `firmware/f4hwn.falcon-1k.v4.0.0.bin` : Falcon 1K, la même version avec 1024 canaux rangés dans les réglages propres à son slot (format F4HWN). En multiboot avec Sonic 4K, chacun garde ses réglages et ses canaux. La Falcon 4K, elle, partage ses 4096 canaux avec Sonic 4K.
+- `Falcon apps/FGuide.app` : mémo des touches de Falcon sur la radio (10 rubriques, en anglais), version 4.0.0 pour Falcon 4.0.0.
 - `Falcon apps/FSystemInfo.app` : informations système de Falcon (firmware, mémoire, pile, batterie, identité).
 - `Falcon apps/FCatch.app` : capture des émetteurs proches (Close Call) avec tonalité, nom du canal mémoire, choix VHF / UHF / VHF+UHF, blocage des fréquences (SK2) et historique de 17 entrées sauvegardé (Falcon 3.1.1 ou plus).
+- `Falcon apps/POCSAGScan.app` : POCSAG Scan 2.1F, messages de bipeurs (1200 / 512 bauds) sur la liste mémoire POCSAG, journal dans l'Historique (Falcon 4.0 uniquement).
+- `Falcon apps/FKeys.app` : FKeys 4.0.0, réattribue les touches longues et F+ de l'écran VFO (préréglages FALCON, F4HWN, SONIC ou personnalisé).
 - `Falcon apps/FirstAid.app` : gestes de premiers secours (ERC 2025) et métronome de RCP.
 - `Falcon apps/FSurvival.app` : conseils de survie et balise SOS à la lampe.
 - `Falcon apps/FMorse.app` : envoi de messages en Morse, à la lampe ou par radio (anciennement Morse).
@@ -29,14 +35,16 @@ Firmware pour UV-K1 / K5(v3), dérivé de [Sonic](https://github.com/Robby69400/
 - `Falcon apps/Translations` : FirstAid et FSurvival en français (FR), espagnol (ES) et polonais (PL).
 - `Falcon apps/FMessage.app` et `Falcon apps/FMessageOption.app` : messagerie entre radios (FMessage 3.0) et ses réglages (« FMessOption » dans la liste des apps). Les installer ensemble.
 - `F4WHN apps` : les 46 applications officielles F4HWN disponibles (version 6.3.0), optionnelles.
-- `chirp/falcon4k.chirp.v3.2.0.py` : pilote CHIRP de la Falcon 4K, avec les quatre canaux prioritaires, SetRxG et les raccourcis REVERSE FQ, MESSAGES, FMESSAGE et BAND SCAN.
-- `chirp/falcon1k.chirp.v3.2.0.py` : pilote CHIRP de la Falcon 1K (mémoires 995 à 1024 : les bandes). Chaque pilote refuse l'autre édition.
+- `chirp/falcon4k.chirp.v4.0.0.py` : pilote CHIRP de la Falcon 4K, avec les quatre canaux prioritaires, SetRxG et les raccourcis REVERSE FQ, MESSAGES, FMESSAGE et BAND SCAN, les 30 listes, les menus SCAN et DISPLAY et la table des touches FKeys.
+- `chirp/falcon1k.chirp.v4.0.0.py` : pilote CHIRP de la Falcon 1K (mémoires 995 à 1024 : les bandes). Il n'accepte que Falcon 1K 4.0 ; chaque pilote refuse l'autre édition.
 - `sources/runtime` : sources complètes du firmware, pilotes et dépendances embarquées.
 - `sources/installer` : sources de l'installateur temporaire (il réutilise les pilotes de `sources/runtime`).
 - `sources/fguide`, `sources/fsysteminfo` : sources de FGuide et FSystemInfo.
 - `sources/fcatch` : sources de FCatch (capture et tonalités dérivées de FSearch / GOGUFW Search, Apache-2.0).
 - `sources/firstaid`, `sources/fsurvival`, `sources/fmorse`, `sources/fsnake` : sources de FirstAid, FSurvival (avec leurs traductions), FMorse et FSnake.
 - `sources/fmessage` : sources et tests de FMessage et FMessOption.
+- `sources/pocsagrx` : sources de POCSAG Scan (dérivée de POCSAG RX d'Armel F4HWN, Apache-2.0).
+- `sources/fkeys` : sources de FKeys.
 - `tools`, `validation/tests`, `Dockerfile`, `build-with-docker.sh` : compilation et tests.
 - `LICENSE`, `NOTICE` : licences et attributions. Les sources tierces conservent leurs mentions.
 
@@ -48,9 +56,9 @@ Pour conserver le firmware principal : démarrer ce firmware, ouvrir Firmware Sl
 
 Pour remplacer le firmware principal : utiliser Firmware Flash / DFU avec le même BIN.
 
-Au premier lancement, laisser l'écran d'installation « FALCON v3.2.0 » et « Powering Up » terminer son travail jusqu'au redémarrage automatique. Ne pas couper l'alimentation pendant l'installation ; une coupure est toutefois reprise au démarrage suivant, dans le même slot. Aucun clic « Installer les assets » n'est nécessaire.
+Au premier lancement, laisser l'écran d'installation « FALCON v4.0.0 » et « Powering Up » terminer son travail jusqu'au redémarrage automatique. Ne pas couper l'alimentation pendant l'installation ; une coupure est toutefois reprise au démarrage suivant, dans le même slot. Aucun clic « Installer les assets » n'est nécessaire.
 
-Si l'écran d'installation affiche `S 04 E 10`, l'installation a été refusée sans rien effacer : la zone de Falcon contient des applications écrites par un autre firmware (emplacements Apps 80 à 99 d'un futur F4HWN). Appuyer sur PTT restaure le firmware principal.
+Si l'écran d'installation affiche `S 04 E 10`, l'installation a été refusée sans rien effacer : la zone de Falcon contient des applications écrites par un autre firmware (emplacements Apps 69 à 98 d'un futur F4HWN). Appuyer sur PTT restaure le firmware principal.
 
 Si Falcon affiche « MODULES MISSING / REINSTALL FALCON », ses modules en mémoire externe ont été effacés ou remplacés : réécrire le même BIN.
 
@@ -59,7 +67,7 @@ Les applications (celles de `Falcon apps` et de `F4WHN apps`) s'installent sépa
 ## Organisation de la mémoire
 
 - Flash interne : le cœur du firmware.
-- Mémoire externe, par slot de firmware : les modules de code (chargés à la demande dans 4 Ko de RAM, lecture DMA et contrôle par le CRC matériel ; un module peut écrire la flash ou appeler un autre module, il est rechargé avant d'y revenir) et les ressources (polices, textes des menus). Ils occupent la zone d'assets v7 du slot (0x1CA000 + slot × 16 Ko) et une banque de 32 Ko en fin de réserve Apps v7 (0x1A2000 + slot × 32 Ko, emplacements Apps 80 à 99). Les 64 emplacements Apps, la configuration, la calibration et les canaux ne sont jamais touchés. Voir `sources/runtime/App/store_layout.h`.
+- Mémoire externe, par slot de firmware : les modules de code (chargés à la demande dans 4 Ko de RAM, lecture DMA et contrôle par le CRC matériel ; un module peut écrire la flash ou appeler un autre module, il est rechargé avant d'y revenir) et les ressources (polices, textes des menus). Ils occupent la zone d'assets v7 du slot (0x1CA000 + slot × 16 Ko) et une banque de 48 Ko dans la réserve Apps v7 (0x18C000 + slot × 48 Ko, emplacements Apps 69 à 98), après le journal POCSAG (0x182000, 32 Ko) et 8 Ko gardés pour MESSAGES (0x18A000). Les 64 emplacements Apps, la configuration, la calibration et les canaux ne sont jamais touchés. Voir `sources/runtime/App/store_layout.h`.
 - L'écran ne reçoit que les lignes modifiées, avec une image complète au moins une fois par seconde.
 
 ## Fonctionnement de cette version
@@ -73,6 +81,8 @@ Après saisie directe d'un numéro de canal sans liste, les flèches parcourent 
 Historique : l'action « HISTORY » (F1/F2 court ou long, M long) ouvre l'historique depuis le VFO, sans lancer de scan ; le titre passe dans la barre d'état et la liste gagne une ligne. Dans Spectre, Sentinel et depuis le VFO, une entrée écoutée (flèches) utilise sa propre modulation et sa largeur de bande ; appui long sur 1 : la fréquence de l'entrée passe dans le VFO principal (mode fréquence) et l'écran revient au VFO.
 
 Messages : `*` bascule entre la page HISTORY et la page MESSAGES (le scan et la réception sont arrêtés sur MESSAGES). Chaque message reçu par FMessage y est enregistré automatiquement (mémoire externe 0x012000, deux secteurs de 4 Ko, zone libre dans F4HWN) ; les 32 derniers sont listés « 01-AA: DEBUT », du plus récent au plus ancien, avec un numéro d'arrivée de 01 à 32 (il ne change pas après une suppression et repart à 01 après CLEAR ALL) et une ligne pointillée entre deux ouvertures de FMessage. `M` ouvre le message, `6` le supprime (DELETE ?), `6` long efface tout (CLEAR ALL ?). L'action « MESSAGES » (F1/F2, M long) ouvre l'historique directement sur cette page. Écran, lecture et suppression sont dans le module externe « messages ». Le journal RX/TX n'existe plus.
+
+POCSAG : un second `*` ouvre la page POCSAG, qui lit le journal écrit par POCSAG Scan (mémoire externe 0x182000, 8 secteurs, jusqu'à 512 caractères par page, gardé après extinction) ; mêmes touches que MESSAGES.
 
 FMessage : l'action « FMESSAGE » (F1/F2, M long) ouvre l'app FMessage (raccourci d'app 15) ; double bip si elle n'est pas installée.
 
@@ -118,6 +128,8 @@ bash sources/fguide/guide/build.sh
 bash sources/fsysteminfo/sysinfo/build.sh
 bash sources/fmessage/fmessage/build.sh
 bash sources/fmessage/fmsgoption/build.sh
+bash sources/fkeys/keys/build.sh
+bash sources/pocsagrx/pocsagrx/make.sh
 ```
 
 ## Tests

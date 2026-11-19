@@ -10,15 +10,12 @@
 #define MSG_SHOWN_MAX 32u /* messages listed, newest first               */
 #define MSG_ROWS_MAX  (2u * MSG_SHOWN_MAX) /* with the session markers   */
 
-/* One row of the MESSAGES page: a message, or a session marker (a dotted
- * line: FMessage was opened again). */
+/* One row of a journal page (MESSAGES, POCSAG): an entry, or a session
+ * marker (a dotted line: the app was opened again). */
 typedef struct {
-    uint8_t slot;      /* record slot, for opening and deleting           */
+    uint32_t id;       /* MESSAGES: record slot; POCSAG: journal address  */
     bool marker;
-    char cs[2];
-    uint8_t len;
-    uint8_t number;    /* arrival number, 1..32                          */
-    char text[15];     /* the start of the text                          */
+    char line[22];     /* its line in the list, 21 characters at most     */
 } MSG_Row_t;
 
 /* Resident: the service handed to apps, and the start of an app session. */

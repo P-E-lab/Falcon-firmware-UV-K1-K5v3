@@ -10,7 +10,7 @@ for f in sorted(apps.glob('*.app')):
 assert len(list(apps.glob('*.app')))==46  # the F4HWN 6.3.0 apps of the archive
 print('PASS all 40 official packages: real ARM loader header validation, API/capabilities/VMA and code/asset CRCs',flush=True)
 api=addr('app_api');a=bytes(u.mem_read(api,396))
-assert a[0:2]==bytes([1,3]) and struct.unpack_from("<H",a,2)[0]==408
+assert a[0:2]==bytes([1,4]) and struct.unpack_from("<H",a,2)[0]==440  # 4.0: API level 4, Falcon extensions after it
 for off in range(328,396,4):assert struct.unpack_from('<I',a,off)[0]&1,off
 for v in [0,1,123456789,0xffffffff]:
  end=call('app_append_u32',0x20006000,v);assert bytes(u.mem_read(0x20006000,end-0x20006000)).decode()==str(v)

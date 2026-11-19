@@ -4,12 +4,14 @@
  * The store holds what Falcon keeps outside the internal flash: the native
  * code modules (executed one at a time from the 4 KiB overlay RAM) and the
  * read-only resources (fonts, menu texts). Each firmware slot 0..4 owns one
- * store, made of two physical zones seen as one 48 KiB virtual space:
+ * store, made of two physical zones seen as one 64 KiB virtual space:
  *
  *   virtual 0x0000..0x3FFF -> the F4HWN v7 asset zone of the slot
  *                             0x1CA000 + slot * 16 KiB (standard v7 location)
- *   virtual 0x4000..0xBFFF -> a 32 KiB bank at the end of the v7 Apps reserve
- *                             0x1A2000 + slot * 32 KiB (Apps slots 80..99)
+ *   virtual 0x4000..0xFFFF -> a 48 KiB bank in the v7 Apps reserve
+ *                             0x18C000 + slot * 48 KiB (Apps slots 69..98),
+ *                             after the POCSAG journal (0x182000, 32 KiB)
+ *                             and the 8 KiB kept for MESSAGES (0x18A000)
  *
  * Virtual layout:
  *   0x0000  FWA1 header (32 B), v7 asset-pack compatible; its payload is the
@@ -27,10 +29,12 @@
 
 #define STORE_ASSET_BASE 0x1CA000u /* v7 asset zone of slot 0          */
 #define STORE_ASSET_SIZE 0x4000u   /* 16 KiB per firmware slot         */
-#define STORE_BANK_BASE  0x1A2000u /* Apps reserve, slots 80..99       */
-#define STORE_BANK_SIZE  0x8000u   /* 32 KiB per firmware slot         */
+#define STORE_BANK_BASE  0x18C000u /* Apps reserve, slots 69..98       */
+#define STORE_BANK_SIZE  0xC000u   /* 48 KiB per firmware slot         */
 #define STORE_SIZE       (STORE_ASSET_SIZE + STORE_BANK_SIZE)
 #define STORE_SLOTS      5u
+_Static_assert(STORE_BANK_BASE + STORE_SLOTS * STORE_BANK_SIZE <= STORE_ASSET_BASE,
+               "store banks end before the v7 asset zones");
 
 #define STORE_FWA1_MAGIC      0x31415746u /* "FWA1"                           */
 #define STORE_MAGIC           0x32545346u /* "FST2"                           */

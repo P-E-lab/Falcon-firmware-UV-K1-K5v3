@@ -38,7 +38,7 @@ def render():
     u.mem_write(addr('gFrameBuffer'), b'\0' * 7 * 128)
     u.mem_write(addr('gStatusLine'), b'\0' * 128)
     assert call('APP_NativeBegin', 14)
-    call('RenderMessagesNative', count=50000000)
+    call('RenderJournalNative', count=50000000)
     call('APP_NativeEnd')
 
 put8(addr('sessionPending'), 1)

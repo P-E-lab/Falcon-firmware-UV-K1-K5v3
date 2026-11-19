@@ -36,13 +36,14 @@
 #include "app/spectrum.h"
 #include "app/common.h"
 #include "app/app.h"
+#include "apps/app_overlay.h"
 
 EEPROM_Config_t gEeprom = {0};
 
 
 // UI indices are compact; stored sound IDs stay compatible with older presets.
 const uint8_t gRogerModes[6] = {0, 10, 3, 9, 4, 6};
-// Keep the existing EEPROM ALL marker (51) while the UI has 25 lists.
+// Keep the existing EEPROM ALL marker (51) while the UI has 30 lists.
 static uint8_t SETTINGS_ScanListFromStorage(uint8_t stored)
 {
     return stored == 51 ? MR_CHANNELS_LIST + 1 : stored >= 1 && stored <= MR_CHANNELS_LIST ? stored : 1;
@@ -97,7 +98,9 @@ static void SaveExtraPriorities(void)
     PY25Q16_WriteBuffer(0xA170, stored, sizeof stored, false);
 }
 
-void SETTINGS_InitEEPROM(void)
+/* The settings read from flash, in the options module: SETTINGS_InitEEPROM
+ * below loads it (power-on, Spectre exit, CHIRP write). */
+static NATIVE_CODE(options) void SETTINGS_InitEEPROMNative(void)
 {
     uint8_t Data[32] = {0};
 
@@ -380,6 +383,15 @@ void SETTINGS_InitEEPROM(void)
     }
 }
 
+bool SETTINGS_InitEEPROM(void)
+{
+    if (!APP_NativeBegin(NATIVE_OPTIONS))
+        return false; /* no store: MODULES MISSING */
+    SETTINGS_InitEEPROMNative();
+    APP_NativeEnd();
+    return true;
+}
+
 void SETTINGS_LoadCalibration(void)
 {
     //  uint8_t Mic;
@@ -481,7 +493,7 @@ void SETTINGS_FactoryReset(bool bIsAll)
 {
     PY25Q16_SectorErase(0x00A000);
     if (bIsAll) {
-        for (uint32_t addr = 0x000000; addr < 0x00E000; addr += 0x1000) {
+        for (uint32_t addr = 0x000000; addr < 0x00F000; addr += 0x1000) { // up to the FKeys sector
             PY25Q16_SectorErase(addr);
         }
 #if defined(ENABLE_10K)
@@ -846,7 +858,7 @@ void SETTINGS_SaveChannel(uint16_t Channel, uint8_t VFO, const VFO_Info_t *pVFO,
 
         State_t *State;
 
-        uint8_t Buf[0x10] = {0};
+        uint8_t Buf[0x10] __attribute__((aligned(4))) = {0}; // written by words through State_t
 
         State = (State_t *)Buf;
         State->_32[0] = pVFO->freq_config_RX.Frequency;

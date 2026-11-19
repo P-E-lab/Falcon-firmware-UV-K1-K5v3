@@ -196,6 +196,10 @@ static void SPI_TransferBuf(const uint8_t *Buf, uint32_t Size, bool read)
     LL_DMA_SetPeriphAddress(DMA1, CHANNEL_WR, LL_SPI_DMA_GetRegAddr(SPIx));
     LL_DMA_SetDataLength(DMA1, CHANNEL_WR, Size);
 
+    /* The DMA reads or writes Buf behind the compiler's back: the CPU stores
+     * to Buf land before it starts (the __DMB below orders the reads after
+     * it). Emits no instruction. */
+    __COMPILER_BARRIER();
     TC_Flag = false;
     LL_DMA_EnableIT_TC(DMA1, CHANNEL_RD);
     LL_DMA_EnableChannel(DMA1, CHANNEL_RD);

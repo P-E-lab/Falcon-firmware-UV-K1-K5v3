@@ -54,7 +54,7 @@
  *      viewer_update (the LCD without the K5Viewer side effect), vfo_stage
  *      (deferred update of the current VFO) */
 #define APP_ABI_MAJOR 1u
-#define APP_API_LEVEL 3u
+#define APP_API_LEVEL 4u
 
 /* App name length in app_header_t, the name handoff() takes (API level 3). */
 #define APP_NAME_LEN 16
@@ -90,6 +90,8 @@ enum {
     APP_KEY_STAR = 14,
     APP_KEY_F = 15,
     APP_KEY_PTT = 16,
+    APP_KEY_SIDE2 = 17, /* API level 4: the side keys */
+    APP_KEY_SIDE1 = 18,
     APP_KEY_INVALID = 19,
     APP_KEY_SAVER = 0xFD, /* virtual: saver active, skip this app frame       */
     APP_KEY_WAKE = 0xFE,  /* virtual: saver dismissed, redraw without action */
@@ -134,6 +136,20 @@ typedef struct {
     uint8_t compander;
     char name[16]; /* fixed-width wire field; NUL termination is not required */
 } app_beam_channel_t;
+
+/* API level 4: a memory channel as mr(APP_MR_READ) gives it. */
+typedef struct {
+    uint32_t rx_frequency; /* 10 Hz units */
+    char name[11];         /* at most 10 characters plus NUL */
+} app_mr_channel_t;
+_Static_assert(offsetof(app_mr_channel_t, name) == 4u && sizeof(app_mr_channel_t) == 16u, "memory-channel ABI");
+enum { APP_MR_READ = 0, APP_MR_LIST_NAME = 1, APP_MR_STAGE = 2 };
+#define APP_MR_INVALID (-1)
+/* API level 4: signed centi-arcseconds (360000 a degree). */
+typedef struct {
+    int32_t lat_cas;
+    int32_t lon_cas;
+} app_gps_position_t;
 
 _Static_assert(sizeof(app_beam_channel_t) == 44u, "BEAM ABI/wire channel layout changed");
 
@@ -442,8 +458,57 @@ typedef struct app_api {
      * beam_save, so start from beam_get and change what is needed. NULL on a
      * build without the BEAM bridge. */
     bool (*vfo_stage)(const app_beam_channel_t *ch);
+
+    /* ---- API level 4 (F4HWN v7.0.0 layout) ----
+     * mr: APP_MR_READ returns the channel's scan list (0 none, 1..30 on
+     * Falcon) or APP_MR_INVALID, and fills out (app_mr_channel_t) when not
+     * NULL; APP_MR_LIST_NAME returns the trimmed name length of list index
+     * (1..30) and copies it NUL-terminated into out (char[7] on Falcon, the
+     * v7 apps read at most 5); APP_MR_STAGE selects that memory on the TX VFO
+     * when app_main() returns (one per run, the Apps menu then closes).
+     * tx_power: level 0..7 sets the PA for the app's own transmissions, the
+     * VFO keeps its power; returns the VFO's level. gps_position: false on
+     * Falcon (no K5Viewer GPS). */
+    int (*mr)(uint8_t op, uint16_t index, void *out);
+    uint8_t (*tx_power)(uint8_t level);
+    bool (*gps_position)(app_gps_position_t *out);
+
+    /* ---- Falcon extensions (Falcon 4.0: after the level 4 services) ---- */
     uint32_t falcon_memory_tag;                            /* 0x314d4346: bounded memory read extension */
     uint32_t (*memory_read)(uint16_t channel, char *name); /* name >=9 bytes or NULL; 0xffff returns count */
+
+    /* ---- Falcon: messages kept for the history's MESSAGES page ----
+     * Present when api_size covers it and falcon_memory_tag is 0x314d4346.
+     * message points to the sender's callsign (2 characters) followed, four
+     * bytes on, by the text; len is the text length (at most 64). Saved at
+     * once in external flash, outside the overlay RAM: callable while the app
+     * runs. Blocks up to ~0.3 s when it erases a sector (every 51 records). */
+    void (*message_save)(const void *message, unsigned len);
+
+    /* ---- Falcon: FKeys key tables ----
+     * Present when api_size covers it and falcon_memory_tag is 0x314d4346.
+     * Stages up to 117 bytes (the FKeys table, see app/fkeys.h) in RAM; the
+     * loader writes them to the slot's FKeys sector after the app returns.
+     * Read the current table with sys_storage_read(0xE000, ...). */
+    void (*keys_save)(const uint8_t *table, uint8_t len);
+
+    /* ---- Falcon 3.5: the POCSAG journal (history's POCSAG page) ----
+     * Present when api_size covers it and falcon_memory_tag is 0x314d4346.
+     * plog_append writes one record (POCSAG Scan: a page, app/pocsaglog.h)
+     * in external flash, outside the overlay RAM, and returns its address
+     * (0: not written); the first one of an app session is preceded by a
+     * session marker. It blocks up to ~0.3 s when a sector is erased (every
+     * 4 KiB of records). plog_prev gives the record before an address, 0 for
+     * the newest, 0 once past the oldest; plog_read copies up to max payload
+     * bytes (Falcon 4.0: max = n | offset << 16 copies n bytes from that
+     * offset of the payload) and returns the payload length, -1 for a session marker, -2 for a
+     * deleted or incomplete record, -3 for none. */
+    uint32_t (*plog_append)(const void *payload, unsigned len);
+    int (*plog_read)(uint32_t address, void *buf, unsigned max);
+    uint32_t (*plog_prev)(uint32_t address);
+    /* A frequency (x10 Hz) on one line, "%3u.%05u" in the small bold font:
+     * the digits of the dual-VFO screen, in bold. */
+    void (*draw_frequency_bold)(uint32_t f_10hz, uint8_t x, uint8_t line);
 } app_api_t;
 
 /* Serial ports and serial_ctl state bits (API level 3). */
@@ -460,8 +525,12 @@ _Static_assert(offsetof(app_api_t, sys_edition) == 276u && offsetof(app_api_t, a
                "the level 2 API prefix must stay 328 bytes");
 _Static_assert(offsetof(app_api_t, handoff) == 356u && offsetof(app_api_t, tx_prepare) == 364u &&
                    offsetof(app_api_t, serial_read) == 368u && offsetof(app_api_t, blit_page) == 380u &&
-                   offsetof(app_api_t, vfo_stage) == 392u && offsetof(app_api_t, falcon_memory_tag) == 396u &&
-                   sizeof(app_api_t) == 404u,
+                   offsetof(app_api_t, vfo_stage) == 392u && offsetof(app_api_t, mr) == 396u &&
+                   offsetof(app_api_t, tx_power) == 400u && offsetof(app_api_t, gps_position) == 404u &&
+                   offsetof(app_api_t, falcon_memory_tag) == 408u && offsetof(app_api_t, message_save) == 416u &&
+                   offsetof(app_api_t, keys_save) == 420u && offsetof(app_api_t, plog_append) == 424u &&
+                   offsetof(app_api_t, plog_prev) == 432u && offsetof(app_api_t, draw_frequency_bold) == 436u &&
+                   sizeof(app_api_t) == 440u,
                "app_api_t is append-only: every edition shares this layout");
 
 /* Wrap-safe modular ordering for deadlines less than half a cycle-counter

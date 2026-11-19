@@ -23,12 +23,14 @@
 #include "misc.h"
 #include "radio.h"
 #include "settings.h"
+#include "app/fkeys.h"
 #include "version.h"
 
 #ifdef ENABLE_FEAT_F4HWN
 #ifdef ENABLE_FMRADIO
 #include "app/action.h"
 #include "ui/ui.h"
+#include "apps/app_overlay.h"
 #endif
 #ifdef ENABLE_SPECTRUM
 #include "app/spectrum.h"
@@ -130,10 +132,16 @@ static __attribute__((noinline)) void MainInit(void)
     }
 #endif
 
-    SETTINGS_InitEEPROM();
+    /* The settings are read by the options module: without the store the
+     * radio stops on the MODULES MISSING screen before anything is saved
+     * (the multiboot selector above stays reachable at power-on). */
+    if (!SETTINGS_InitEEPROM())
+        for (;;)
+            GUI_DisplayScreen();
 
     SETTINGS_WriteBuildOptions();
     SETTINGS_LoadCalibration();
+    FKEYS_Load();
 #ifdef ENABLE_FEAT_F4HWN_RXTX_LOG
     RXTX_LOG_Init();
 #endif
@@ -248,6 +256,13 @@ void Main(void)
     MainInit();
     RunPowerOnScreen();
     while (true) {
+        /* Idle sleep: the core waits for the next interrupt (SysTick 10 ms,
+         * keys, UART, USB) instead of spinning. Interrupts are masked around
+         * the test so a tick set just before WFI still wakes it at once. */
+        __disable_irq();
+        if (!gNextTimeslice)
+            __WFI();
+        __enable_irq();
         if (gNextTimeslice) {
             APP_Update();
             APP_TimeSlice10ms();

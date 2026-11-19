@@ -97,6 +97,10 @@ const t_menu_item MenuList[] FP_RESOURCE = {
     {"Sql", MENU_SQL},
     {"SQLSCN", MENU_SQLSCN},
     {"SQLHYS", MENU_SQLHYS},
+    {"NoiLvOf", MENU_NOILVOF},
+    {"MaxRX", MENU_MAXRX},
+    {"RxHold", MENU_RXHOLD},
+    {"ScanPS", MENU_SCANPS},
 #ifdef ENABLE_FEAT_F4HWN
     {"SetCtr", MENU_SET_CTR},
     {"SetInv", MENU_SET_INV},
@@ -108,8 +112,10 @@ const t_menu_item MenuList[] FP_RESOURCE = {
     {"SetLck", MENU_SET_LCK},
 #endif
     {"SetMet", MENU_METER_STYLE},
+    {"PopTim", MENU_POPTIM},
 #ifdef ENABLE_FEAT_F4HWN_RX_TX_TIMER
-    {"SetRxA", MENU_SET_AUD},
+    {"SetRxF", MENU_SET_AUD},
+    {"SetRxA", MENU_SET_AUDA},
     {"SetRxG", MENU_SET_RXG}, // RX AF noise gate
 #endif
 #ifdef ENABLE_FEAT_F4HWN_RX_TX_TIMER
@@ -140,7 +146,7 @@ static const uint8_t MenuCatIds[] = {
     MENU_SET_NFM,
 #endif
     MENU_SCR, MENU_COMPAND, MENU_AM, MENU_LIST_CH, MENU_MEM_CH, MENU_DEL_CH, MENU_MEM_NAME, 0xFF,
-    MENU_PRICH1, MENU_PRICH2, MENU_PRICH3, MENU_PRICH4, MENU_SQLSCN, MENU_SQLHYS, 0xFF,
+    MENU_PRICH1, MENU_PRICH2, MENU_PRICH3, MENU_PRICH4, MENU_SQLSCN, MENU_SQLHYS, MENU_NOILVOF, MENU_MAXRX, MENU_RXHOLD, MENU_SCANPS, 0xFF,
     MENU_F1SHRT, MENU_F1LONG, MENU_F2SHRT, MENU_F2LONG, MENU_MLONG, MENU_AUTOLK,
 #ifdef ENABLE_FEAT_F4HWN
     MENU_SET_LCK, MENU_BTN_INV,
@@ -155,7 +161,7 @@ static const uint8_t MenuCatIds[] = {
 #ifdef ENABLE_FEAT_F4HWN
     MENU_SET_CTR, MENU_SET_INV,
 #endif
-    MENU_METER_STYLE, 0xFF,
+    MENU_METER_STYLE, MENU_POPTIM, 0xFF,
     MENU_TOT,
 #ifdef ENABLE_FEAT_F4HWN_RX_TX_TIMER
     MENU_SET_TMR,
@@ -163,7 +169,7 @@ static const uint8_t MenuCatIds[] = {
     0xFF,
     MENU_MIC, MENU_SET_MET,
 #ifdef ENABLE_FEAT_F4HWN_RX_TX_TIMER
-    MENU_SET_AUD, MENU_SET_RXG,
+    MENU_SET_AUD, MENU_SET_AUDA, MENU_SET_RXG,
 #endif
     MENU_SET_VOLUME, 0xFF,
     MENU_SQL, MENU_STE, MENU_RP_STE, MENU_ROGER, MENU_AUTO_ROGER, MENU_TONE,
@@ -364,6 +370,7 @@ const t_sidefunction gSubMenu_SIDEFUNCTIONS[] = {
 #endif
     {"REVERSE FQ", ACTION_OPT_REVERSE},
     {"BAND SCAN", ACTION_OPT_BAND_SCAN},
+    {"SPECTRE\nVFO", ACTION_OPT_SPECTRE_VFO},
     {"VFO A/B", ACTION_OPT_VFO_AB}, // last: not offered to M Long
 };
 
@@ -506,6 +513,13 @@ void UI_DisplayMenu(void)
         case MENU_SQLSCN:
             sprintf(String, "%d dbm", (int)gSubMenuSelection - 130);
             break;
+        case MENU_NOILVOF:
+        case MENU_MAXRX:
+        case MENU_RXHOLD:
+        case MENU_SCANPS:
+        case MENU_POPTIM:
+            APP_ScanMenuText(String, m, gSubMenuSelection);
+            break;
         case MENU_SQL:
             sprintf(String, "%d", gSubMenuSelection);
             break;
@@ -530,9 +544,9 @@ void UI_DisplayMenu(void)
             if (gSubMenuSelection == 0)
                 strcpy(String, gSubMenu_OFF_ON[0]);
             else if (gSubMenuSelection < 105)
-                sprintf(String, "D%03oN", DCS_GetOption(gSubMenuSelection - 1));
+                sprintf(String, "%02u-D%03oN", gSubMenuSelection, DCS_GetOption(gSubMenuSelection - 1));
             else
-                sprintf(String, "D%03oI", DCS_GetOption(gSubMenuSelection - 105));
+                sprintf(String, "%02u-D%03oI", gSubMenuSelection - 104, DCS_GetOption(gSubMenuSelection - 105));
             break;
 
         case MENU_R_CTCS:
@@ -540,7 +554,7 @@ void UI_DisplayMenu(void)
             if (gSubMenuSelection == 0)
                 strcpy(String, gSubMenu_OFF_ON[0]);
             else
-                sprintf(String, "%u.%uHz", CTCSS_Options[gSubMenuSelection - 1] / 10,
+                sprintf(String, "%02u-%u.%u", gSubMenuSelection, CTCSS_Options[gSubMenuSelection - 1] / 10,
                         CTCSS_Options[gSubMenuSelection - 1] % 10);
             break;
         }
@@ -868,12 +882,10 @@ void UI_DisplayMenu(void)
             break;
 
         case MENU_SET_AUD:
-            if (gTxVfo->Modulation == MODULATION_AM)
-                strcpy(String, gSubMenu_SET_AUD_AM[gSubMenuSelection]);
-            else if (gTxVfo->Modulation == MODULATION_USB)
-                strcpy(String, "N/A");
-            else
-                strcpy(String, gSubMenu_SET_AUD_FM[gSubMenuSelection]);
+            strcpy(String, gSubMenu_SET_AUD_FM[gSubMenuSelection]);
+            break;
+        case MENU_SET_AUDA:
+            strcpy(String, gSubMenu_SET_AUD_AM[gSubMenuSelection]);
             break;
 
 #ifdef ENABLE_FEAT_F4HWN_NARROWER

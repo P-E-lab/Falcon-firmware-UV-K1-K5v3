@@ -19,6 +19,7 @@
 #include <stdint.h>
 #include <string.h>
 #include "app/action.h"
+#include "app/fkeys.h"
 #include "app/app.h"
 #ifdef ENABLE_FLASHLIGHT
 #include "app/flashlight.h"
@@ -1604,6 +1605,9 @@ static void ProcessKey(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld)
             gPttWasReleased = false;
         }
     }
+
+    if (Key != KEY_PTT && FKEYS_Intercept(Key, bKeyPressed, bKeyHeld))
+        goto Skip;
 
 #ifdef ENABLE_FEAT_F4HWN // For F + SIDE1 or F + SIDE2
     if (gWasFKeyPressed && Key == KEY_EXIT && gScreenToDisplay == DISPLAY_MAIN && !gInputBoxIndex &&

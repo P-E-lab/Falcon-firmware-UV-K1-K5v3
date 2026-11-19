@@ -30,7 +30,7 @@ n = [s for s in elf.get_section_by_name('.symtab').iter_symbols() if s.name == '
 table = bytes(u.mem_read(addr('gSubMenu_SIDEFUNCTIONS'), n * 8))
 entries = [(bytes(u.mem_read(struct.unpack_from('<I', table, i * 8)[0], 12)).split(b'\0')[0], table[i * 8 + 4])
            for i in range(n)]
-assert entries[-2:] == [(b'BAND SCAN', Q['act']), (b'VFO A/B', entries[-1][1])], entries
+assert entries[-3:] == [(b'BAND SCAN', Q['act']), (b'SPECTRE\nVFO', 31), (b'VFO A/B', entries[-1][1])], entries
 print('PASS shortcut: BAND SCAN (action 30) for F1, F2 and M long')
 
 for f in ['ST7565_BlitFullScreen', 'ST7565_BlitStatusLine', 'ST7565_BlitLine', 'SYSTEM_DelayMs']:

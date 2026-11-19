@@ -2,7 +2,8 @@
  * engine.
  * Status line: page title (bold) and battery percent.
  * Home: the sections (arrows + MENU, or digit 1-9 / 0 for the first 10).
- * Section: "KEY: TEXT" lines in the 5x5 font of the Falcon lists, scrolled
+ * Section: each key in inverse video with its text under it, a dotted line
+ * between entries, short NAME VALUE lists as tables, in the 5x5 font of the Falcon lists, scrolled
  * with the arrows. The text comes from make_text.py (assets, then text_tail
  * when it does not fit). On the CPR page, MENU starts the metronome. */
 #include <stdint.h>
@@ -92,6 +93,14 @@ static void center5(const char *s, uint8_t y)
     while (s[n])
         n++;
     text5(s, (uint8_t)((128u - 6u * n) / 2u), y);
+}
+
+static uint8_t text_width(const char *s)
+{
+    uint8_t n = 0;
+    while (s[n])
+        n++;
+    return n * 6u;
 }
 
 /* ---- text blob ---- */
@@ -248,11 +257,47 @@ static void draw_page(uint8_t s, uint8_t top, uint8_t lines)
     uint16_t offset = section_start(s, NULL);
     text_field(&offset); /* home label */
     set_title(text_field(&offset));
+    if (lines > ROWS_PAGE) { /* page number in the title when it fits: "PERDU 1/2" */
+        uint8_t n = 0;
+        while (title[n])
+            n++;
+        const uint8_t pages = (lines + ROWS_PAGE - 1u) / ROWS_PAGE;
+        const uint8_t page = (top + 2u * ROWS_PAGE - 1u) / ROWS_PAGE;
+        if (n + 4u <= 14u && pages <= 9u) {
+            title[n] = ' ', title[n + 1] = (char)('0' + page), title[n + 2] = '/';
+            title[n + 3] = (char)('0' + pages), title[n + 4] = 0;
+        }
+    }
     status();
     for (uint8_t i = 0; i < top + ROWS_PAGE && i < lines; i++) {
-        const char *text = text_field(&offset);
-        if (i >= top)
-            text5(text, 0, 1u + (i - top) * ROW_H);
+        char *text = (char *)text_field(&offset);
+        if (i < top)
+            continue;
+        const uint8_t y = 1u + (i - top) * ROW_H, kind = *text++;
+        if (kind == 'R') { /* table row: NAME at the left, VALUE at the right */
+            char *value = text;
+            while (*value && *value != '|')
+                value++;
+            if (*value)
+                *value++ = 0;
+            text5(text, 1, y);
+            text5(value, 124u - text_width(value), y);
+        } else if (kind == 'T' || kind == 'U') { /* text under a key or beside a number */
+            text5(text, kind == 'T' ? 8u : 14u, y);
+        } else { /* 'K' key or 'N' step number, in inverse video */
+            if (i > top) /* dotted line between two entries */
+                for (uint8_t x = 0; x < 124u; x += 2)
+                    A->fb[(y - 1u) >> 3][x] |= (uint8_t)(1u << ((y - 1u) & 7u));
+            if (kind == 'N') {
+                text5(text + 2, 14, y);
+                text[2] = 0;
+            }
+            text5(text, 1, y);
+            const uint8_t width = text_width(text);
+            for (uint8_t py = y; py <= y + 5u; py++)
+                for (uint8_t x = 0; x <= width; x++)
+                    A->fb[py >> 3][x] ^= (uint8_t)(1u << (py & 7u));
+        }
     }
     scroll_bar(top, ROWS_PAGE, lines, 56);
     A->blit_full();

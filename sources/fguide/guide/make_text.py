@@ -5,9 +5,8 @@ Layout (all lengths are bytes):
   10 x { u16 offset, u8 line_count }            section table
   per section at its offset:
     u8 n, home label    u8 n, page title    line_count x { u8 n, line }
-Entries read "KEY: DESCRIPTION" as in the Keys Infos popups, wrapped here to
-LINE_CHARS (5x5 font, 6 px per glyph); continuation lines are indented by
-INDENT spaces. The first ASSET_MAX bytes go to the app assets, the rest to
+Entries are drawn in two columns: the key in inverse video, the description
+wrapped beside it (see entry_lines). The first ASSET_MAX bytes go to the app assets, the rest to
 text_tail.h (code rodata).
 """
 import sys
@@ -23,18 +22,29 @@ HOME_CHARS = 17   # after the section number
 ALLOWED = set(' !"#$%&\'()*+,-./0123456789:;<=>?ABCDEFGHIJKLMNOPQRSTUVWXYZ[]_')
 
 
-def entry_lines(key, desc):
-    words = (key + (': ' + desc if desc else '')).split()
-    lines, line, width = [], '', LINE_CHARS
-    for word in words:
-        assert len(word) <= LINE_CHARS - INDENT, word
+KEY_CHARS = 6     # key column, x 1..36, inverse video
+DESC_CHARS = 14   # description column, x 41..124
+
+
+def wrap(text, width):
+    lines, line = [], ''
+    for word in text.split():
+        assert len(word) <= width, word
         if line and len(line) + 1 + len(word) > width:
             lines.append(line)
-            line, width = ' ' * INDENT + word, LINE_CHARS
+            line = word
         else:
             line = (line + ' ' + word) if line else word
-    lines.append(line)
-    return lines
+    return lines + [line] if line else lines
+
+
+def entry_lines(key, desc):
+    """Two columns. First char of each line: 'K' key (<= 6 chars, padded) then
+    the first description line; 'L' a longer key alone; ' ' a description line."""
+    desc = wrap(desc, DESC_CHARS) if desc else []
+    if len(key) <= KEY_CHARS:
+        return ['K' + key.ljust(KEY_CHARS) + (desc[0] if desc else '')] + [' ' + d for d in desc[1:]]
+    return ['L' + key] + [' ' + d for d in desc]
 
 
 def section_lines(rows):

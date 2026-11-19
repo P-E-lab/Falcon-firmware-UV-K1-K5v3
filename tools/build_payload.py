@@ -16,7 +16,7 @@ import subprocess
 import zlib
 from pathlib import Path
 
-import zopfli.zlib
+import lzma
 
 # Module ids follow NATIVE_MENU (1) .. NATIVE_JOURNAL (14) in apps/app_overlay.h.
 MODULES = ('menu', 'editor', 'rf', 'fm', 'vfo', 'scan', 'plot', 'lists', 'options', 'boot',
@@ -148,8 +148,12 @@ def main():
     store, placements, used_asset, used_bank = build_store(c, firmware, [resources] + modules)
 
     raw = firmware + store
-    compressed = zopfli.zlib.compress(thumb_filter(raw, True), numiterations=15)[2:-4]
-    assert thumb_filter(zlib.decompress(compressed, -15), False) == raw
+    # Raw LZMA1, lc = 0, lp = 0, pb = 1: the installer's decoder (App/pack_lzma.c)
+    # is fixed to these, so its probability tables stay small (3.7 KiB of RAM).
+    filters = [{'id': lzma.FILTER_LZMA1, 'preset': 9 | lzma.PRESET_EXTREME, 'lc': 0, 'lp': 0, 'pb': 1,
+                'dict_size': 1 << 18}]
+    compressed = lzma.compress(thumb_filter(raw, True), format=lzma.FORMAT_RAW, filters=filters)
+    assert thumb_filter(lzma.decompress(compressed, format=lzma.FORMAT_RAW, filters=filters), False) == raw
     meta = [INSTALL_MAGIC, len(firmware), zlib.crc32(firmware), len(store), zlib.crc32(store),
             len(compressed), zlib.crc32(raw), zlib.crc32(compressed)]
     rows = ''.join(','.join(map(str, compressed[i:i + 32])) + ',\n'

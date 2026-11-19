@@ -14,7 +14,7 @@ target_compile_definitions(App INTERFACE
 target_sources(App INTERFACE
     main.c
     install_payload.c
-    pack_inflate.c
+    pack_lzma.c
     scheduler.c
     "${RUNTIME_DIR}/App/board.c"
     "${RUNTIME_DIR}/App/driver/gpio.c"

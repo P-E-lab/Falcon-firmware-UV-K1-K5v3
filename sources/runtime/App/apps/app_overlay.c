@@ -14,6 +14,8 @@
  *     limitations under the License.
  */
 
+#include "app/fkeys.h"
+#include "app/spectrum.h"
 #include "apps/app_overlay.h"
 #include "apps/app_config_proxy.h"
 
@@ -44,6 +46,7 @@
 #endif
 #ifdef ENABLE_FALCON_MESSAGES
 #include "app/messages.h"
+#include "app/pocsaglog.h"
 #endif
 #include "ui/helper.h"
 #include "ui/main.h"
@@ -113,6 +116,7 @@ static struct {
     uint8_t cfg_target_slot;
     uint8_t cfg_proxy_len;
     bool cfg_proxy;
+    bool cfg_keys; /* the staged bytes are the FKeys table */
     bool allow_screen_saver;
     bool screen_saver_wake;
     bool shortcut_launch; /* launched by a held F1, F2 or M */
@@ -334,6 +338,7 @@ static uint16_t app_serial_read(uint8_t port, void *buf, uint16_t len)
     /* From the command parser's own read index, so the bytes an app consumed
      * are never parsed as commands once the main loop resumes. */
     const uint8_t w = (uint8_t)VCP_RxBufPointer;
+    __COMPILER_BARRIER(); // ISR-filled ring: read the bytes after w
     uint8_t r = (uint8_t)VCP_ReadIndex;
     uint8_t *p = buf;
     uint16_t n = 0;
@@ -657,6 +662,16 @@ static void app_cfg_save(const uint8_t *buf, uint8_t len)
     app_state.cfg_len = len; /* mark dirty; the loader commits after the app returns */
 }
 
+// FKeys: stage the key table; the loader writes it to the slot's FKeys sector.
+static void app_keys_save(const uint8_t *buf, uint8_t len)
+{
+    if (len > APP_CONFIG_PROXY_MAX)
+        len = APP_CONFIG_PROXY_MAX;
+    memcpy(app_state.cfg_buf, buf, len);
+    app_state.cfg_len = len;
+    app_state.cfg_keys = true;
+}
+
 _Static_assert(APP_CFG_OFFSET + APP_CONFIG_LOCAL_MAX <= APP_CFG_OWNER &&
                    APP_CFG_OWNER + APP_NAME_LEN <= APP_ASSET_OFFSET,
                "config area overlaps its owner tag or the assets");
@@ -744,6 +759,14 @@ static char *app_append_i32(char *dst, int32_t v)
  * after them (95 px in all); from 1 GHz, the whole string in the normal font
  * (80 px). The drawing routines do not clip, so x is held where both fit. */
 #define APP_FREQ_X_MAX (128u - 95u)
+
+/* The dual-VFO screen's frequency, one line high, in the small bold font. */
+static void app_draw_frequency_bold(uint32_t f_10hz, uint8_t x, uint8_t line)
+{
+    char s[16];
+    sprintf(s, "%3u.%05u", (unsigned)(f_10hz / 100000u), (unsigned)(f_10hz % 100000u));
+    UI_PrintStringSmallBold(s, x, 0, line);
+}
 
 static void app_draw_frequency(uint32_t f_10hz, uint8_t x, uint8_t line)
 {
@@ -1258,6 +1281,94 @@ static void app_screen_save(uint32_t base, uint16_t asset_size, uint8_t *ws)
  * roughly quarter-kilobyte automatic object on every launch and removes that
  * object from the launcher's stack frame.  Callbacks must also obey the ABI's
  * no-external-flash-write rule while entry() is running. */
+/* ---- API level 4: memory channels, scan lists, TX power, GPS ---- */
+static uint16_t mr_pending = 0xFFFFu; /* memory staged by mr(APP_MR_STAGE) */
+static bool tx_power_set;             /* tx_power changed the PA: redone after the app */
+
+static int app_mr_read(uint16_t ch, app_mr_channel_t *out)
+{
+    if (ch >= MR_CHANNELS_MAX || !RADIO_CheckValidChannel(ch, false, 0))
+        return APP_MR_INVALID;
+    const uint32_t frequency = SETTINGS_FetchChannelFrequency(ch);
+    if (frequency == 0u || frequency == UINT32_MAX)
+        return APP_MR_INVALID;
+    if (out) {
+        out->rx_frequency = frequency;
+        memset(out->name, 0, sizeof out->name);
+        SETTINGS_FetchChannelName(out->name, ch);
+        out->name[sizeof out->name - 1] = 0;
+    }
+    const uint8_t list = MR_GetChannelAttributes(ch)->scanlist;
+    return list <= MR_CHANNELS_LIST ? list : 0;
+}
+
+static int app_mr(uint8_t op, uint16_t index, void *out)
+{
+    if (op == APP_MR_READ)
+        return app_mr_read(index, out);
+    if (op == APP_MR_LIST_NAME) {
+        if (index < 1u || index > MR_CHANNELS_LIST)
+            return APP_MR_INVALID;
+        const char *const name = gListName[index - 1u];
+        uint8_t n = 0;
+        while (n < sizeof gListName[0] && name[n] >= 32 && name[n] < 127)
+            n++;
+        while (n && name[n - 1u] == ' ')
+            n--;
+        if (out) {
+            memcpy(out, name, n);
+            ((char *)out)[n] = 0;
+        }
+        return n;
+    }
+    if (op == APP_MR_STAGE) {
+        if (mr_pending != 0xFFFFu || beam_dirty || app_mr_read(index, NULL) < 0)
+            return APP_MR_INVALID;
+        mr_pending = index;
+        gAppVfoExit = true;
+        return 0;
+    }
+    return APP_MR_INVALID;
+}
+
+/* After the app: the staged memory on the TX VFO, as a typed channel number. */
+static void app_mr_commit(void)
+{
+    if (mr_pending == 0xFFFFu)
+        return;
+    const uint16_t ch = mr_pending;
+    const uint8_t vfo = gEeprom.TX_VFO;
+    mr_pending = 0xFFFFu;
+    gEeprom.MrChannel[vfo] = ch;
+    gEeprom.ScreenChannel[vfo] = ch;
+    RADIO_ConfigureChannel(vfo, VFO_CONFIGURE_RELOAD);
+    SETTINGS_SaveVfoIndices();
+    gFlagReconfigureVfos = true;
+}
+
+/* The PA setting of the app's own transmissions; the VFO keeps its power,
+ * recomputed when the app returns. */
+static uint8_t app_tx_power(uint8_t level)
+{
+    /* v7 levels: 0 USER, 1..5 LOW1..LOW5, 6 MID, 7 HIGH; Falcon's power
+     * index 0..6 is LOW..HIGH (no USER: taken as the lowest). */
+    VFO_Info_t *const vfo = gTxVfo;
+    const uint8_t own = vfo->OUTPUT_POWER;
+    if (level <= 7u) {
+        vfo->OUTPUT_POWER = POWER_FromIndex(level ? level - 1u : 0u);
+        tx_power_set = true;
+        RADIO_ConfigureSquelchAndOutputPower(vfo);
+        vfo->OUTPUT_POWER = own;
+    }
+    return (uint8_t)(POWER_ToIndex(own) + 1u);
+}
+
+static bool app_gps_position(app_gps_position_t *out)
+{
+    (void)out;
+    return false; /* no K5Viewer GPS on Falcon */
+}
+
 static uint32_t app_memory_read(uint16_t channel, char *name)
 {
     if (channel == 0xffffu)
@@ -1385,12 +1496,22 @@ static const app_api_t app_api = {
     .viewer_update = app_viewer_update,
 #ifdef ENABLE_FEAT_F4HWN_OVERLAY_BEAM
     .vfo_stage = app_vfo_stage,
+    .mr = app_mr,
+    .tx_power = app_tx_power,
+    .gps_position = app_gps_position,
     .falcon_memory_tag = 0x314d4346u,
     .memory_read = app_memory_read,
 #endif
 #ifdef ENABLE_FALCON_MESSAGES
     .message_save = MSG_Save,
 #endif
+    .keys_save = app_keys_save,
+#ifdef ENABLE_FALCON_MESSAGES
+    .plog_append = PLOG_Append,
+    .plog_read = PLOG_Read,
+    .plog_prev = PLOG_Prev,
+#endif
+    .draw_frequency_bold = app_draw_frequency_bold,
 };
 
 /* Keep post-exit proxy workspace off the application's live stack. */
@@ -1399,7 +1520,11 @@ static __attribute__((noinline)) void app_commit_config(uint8_t slot, const app_
     uint8_t *ws = PY25Q16_OverlayBuffer();
     /* Commit ordinary per-app config, or the bounded target asset selected by
      * a validated proxy descriptor.  Both paths run only after app_main exits. */
-    if (app_state.cfg_len) {
+    if (app_state.cfg_len && app_state.cfg_keys) {
+        PY25Q16_WriteBuffer(ADRESS_FKEYS, app_state.cfg_buf, app_state.cfg_len, false);
+        PY25Q16_InvalidateCache();
+        FKEYS_Load();
+    } else if (app_state.cfg_len) {
         if (app_state.cfg_proxy && app_state.cfg_target_slot < APP_SLOT_COUNT) {
             app_header_t target;
             uint32_t magic;
@@ -1488,6 +1613,7 @@ static __attribute__((noinline, noclone)) uint8_t app_launch(uint8_t slot)
     app_state.run_slot = slot; /* for cfg_load / cfg_save / asset_read */
     app_state.asset_size = h.asset_size;
     app_state.cfg_len = 0;
+    app_state.cfg_keys = false;
     app_config_proxy_resolve();
     beam_dirty = false;
     app_rng_mix();
@@ -1532,6 +1658,7 @@ static __attribute__((noinline, noclone)) uint8_t app_launch(uint8_t slot)
 
 #ifdef ENABLE_FALCON_MESSAGES
     MSG_SessionStart(); /* its first saved message is preceded by a marker */
+    PLOG_SessionStart(); /* so is its first POCSAG page */
 #endif
     app_entry_t entry = (app_entry_t)(((uint32_t)ws + h.entry_off) | 1u);
     app_running = true;
@@ -1560,7 +1687,12 @@ static __attribute__((noinline, noclone)) uint8_t app_launch(uint8_t slot)
     /* The overlay held app code, not a valid config sector. */
     PY25Q16_InvalidateCache();
 
+    if (tx_power_set) { /* drop a tx_power override */
+        tx_power_set = false;
+        RADIO_ConfigureSquelchAndOutputPower(gTxVfo);
+    }
     app_beam_commit();
+    app_mr_commit();
 
     app_commit_config(slot, &h);
 #ifdef ENABLE_FMRADIO

@@ -336,7 +336,7 @@ static NATIVE_CODE(boot) uint8_t app_render(const uint8_t *installed_slots, uint
     return top;
 }
 
-static __attribute__((noinline)) uint8_t app_select(bool wait_release)
+static NATIVE_CODE(boot) uint8_t app_select(bool wait_release)
 {
     if (gCurrentFunction == FUNCTION_TRANSMIT)
         return UINT8_MAX;
@@ -453,7 +453,10 @@ void APP_MenuOpen(void)
 {
     bool first = true;
     for (;;) {
+        if (!APP_NativeBegin(NATIVE_BOOT))
+            return;
         const uint8_t slot = app_select(first);
+        APP_NativeEnd();
         if (slot == UINT8_MAX)
             return;
         first = false;

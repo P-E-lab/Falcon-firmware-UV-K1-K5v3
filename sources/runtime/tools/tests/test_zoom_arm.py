@@ -45,9 +45,9 @@ for level, (half, step) in enumerate(want, 1):
     assert u.mem_read(addr('Spectrum_state'), 1)[0] == Q['range'] and u.mem_read(st, 1)[0] == step
     # the zoomed range keeps AM (an unconfigured range would take the VFO's FM)
     assert u.mem_read(addr('rangeModConfigured'), 1)[0] == 1 and u.mem_read(addr('rangeModulation'), 1)[0] == Q['am']
-# 7 in the zoom saves the band scan, not the zoom.
-key(Q['k7'])
-assert saved[-1] == (11800000, 13700000, Q['band']), saved
+# 7 toggles SKIP MEM (no save key any more); the zoom is kept.
+popups.clear(); key(Q['k7']); key(Q['k7'])
+assert popups == [b'SKIP MEM ON', b'SKIP MEM OFF'], popups
 assert zoom() == 5 and rng() == (11865000, 11875000)
 key(Q['k4'])  # after ±50: around again at ±800, still zoomed
 assert zoom() == 1 and rng() == (11790000, 11950000) and u.mem_read(st, 1)[0] == Q['s25']
@@ -98,3 +98,12 @@ put8(addr('Spectrum_state'), Q['band'])
 put32(addr('lastReceivingFreq'), 11870000); put8(addr('sentinelView'), 1); key(Q['k4'])
 assert zoom() == 0
 print('PASS zoom: ±800/400/200/100/50 kHz around the last RX with 25/12.5/6.25/2.5/1 kHz in a loop, from the first level narrower than the scan; EXIT back to the scan; ZOOM popup on entry; EXIT leaves the zoom; 7 and 6 keep the real scan; none in Sentinel, in the list scan or without a reception in this session')
+# SPECTRE VFO: before any reception, key 4 zooms around the VFO frequency.
+put8(addr('sentinelView'), 0); put8(addr('zoomLevel'), 0); put8(addr('zoomRx'), 0)
+put8(addr('Spectrum_state'), Q['range']); put8(st, Q['s25'])
+put32(addr('RangeStart'), 14470000); put32(addr('RangeStop'), 14630000)
+put32(addr('SpectrumRangeStart'), 14470000); put32(addr('SpectrumRangeStop'), 14630000)
+put32(addr('zoomVfoFreq'), 14550000); popups.clear(); key(Q['k4'])
+assert zoom() >= 1 and sum(rng()) // 2 == 14550000 and rng()[1] - rng()[0] < 160000, (zoom(), rng())
+put32(addr('zoomVfoFreq'), 0)
+print('PASS SPECTRE VFO: before a reception, key 4 zooms around the VFO frequency')

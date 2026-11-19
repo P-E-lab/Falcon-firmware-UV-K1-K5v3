@@ -83,7 +83,7 @@ measured = []
 stub('GetRssi', lambda *a: (measured.append(1), ret(100)))
 stub('Skip', lambda *a: ret())
 put32(addr('lastReceivingFreq'), 14551250); u.mem_write(addr('indexFs'), b'\0\0')
-call('Blacklist.part.0', count=5000000)
+call('Blacklist', count=5000000)  # 4.0: a resident call into the rf module
 put32(addr('scanInfo') + Q['sf'], 14551250)
 put8(addr('vfoScan'), 1); put8(addr('vfoRangeSession'), 1)
 call('Measure', count=5000000); assert not measured, 'blacklisted frequency measured'

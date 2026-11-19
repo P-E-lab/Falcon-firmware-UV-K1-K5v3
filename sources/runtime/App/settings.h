@@ -103,6 +103,7 @@ enum ACTION_OPT_t {
     ACTION_OPT_MESSAGES = 28,
     ACTION_OPT_FMESSAGE = 29,
     ACTION_OPT_BAND_SCAN = 30,
+    ACTION_OPT_SPECTRE_VFO = 31,
     ACTION_OPT_LEN
 };
 
@@ -221,7 +222,7 @@ typedef struct {
 
 extern EEPROM_Config_t gEeprom;
 
-void SETTINGS_InitEEPROM(void);
+bool SETTINGS_InitEEPROM(void); /* false without the store's options module */
 void SETTINGS_LoadCalibration(void);
 uint32_t SETTINGS_FetchChannelFrequency(const uint16_t channel);
 void SETTINGS_FetchChannelName(char *s, const uint16_t channel);

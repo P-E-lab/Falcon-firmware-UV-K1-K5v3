@@ -195,3 +195,9 @@ void BOARD_Init(void)
     BK1080_Init0();
 #endif
 }
+
+/* Built with -nostartfiles: no C++ constructors and no crt0/crtbegin, so the
+ * startup's call to __libc_init_array has nothing to run. */
+void __libc_init_array(void)
+{
+}

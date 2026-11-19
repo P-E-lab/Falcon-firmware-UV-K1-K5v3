@@ -62,7 +62,7 @@
 #define MR_CHANNELS_MAX 1024
 #endif
 
-#define MR_CHANNELS_LIST 25
+#define MR_CHANNELS_LIST 30
 #define MENU_ITEMS       69
 
 

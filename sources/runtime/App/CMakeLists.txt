@@ -20,6 +20,7 @@ target_sources(App INTERFACE
     driver/systick.c
     # Main
     app/action.c
+    app/fkeys.c
     app/app.c
     app/common.c
     app/generic.c
@@ -198,6 +199,7 @@ enable_feature(ENABLE_FEAT_F4HWN_RXTX_LOG
 )
 enable_feature(ENABLE_FALCON_MESSAGES
     app/messages.c
+    app/pocsaglog.c
 )
 
 if(ENABLE_FEAT_F4HWN_MULTIBOOT_OVERLAY AND NOT ENABLE_FEAT_F4HWN_MULTIBOOT)

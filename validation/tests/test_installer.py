@@ -9,7 +9,7 @@ stub('install_render', lambda *_: ret())
 def fresh(target):
     flash[:] = b'\xff' * len(flash)
     flash[APPS[0]:APPS[1]] = b'\xa5' * (APPS[1] - APPS[0])      # 64 Apps of any firmware
-    flash[0x182000:0x1A2000] = b'\x5a' * 0x20000                 # v7 Apps reserve 64..79
+    flash[0x182000:0x18C000] = b"\x5a" * 0xA000                  # POCSAG journal + MESSAGES spot
     sim.update(target=target, internal_matches=True, cut_after=None)
     reset()
     writes.clear()
@@ -19,7 +19,7 @@ def fresh(target):
 def untouched_outside(slot):
     keep = [(0, SLOT_BASE)] + [(SLOT_BASE + s * SLOT_STRIDE, SLOT_BASE + (s + 1) * SLOT_STRIDE)
                                for s in range(5) if s != slot]
-    keep += [APPS, (0x182000, 0x1A2000), (0x1DE000, 0x200000)]
+    keep += [APPS, (0x182000, 0x18C000), (0x1DE000, 0x200000)]
     for s in range(5):
         if s != slot:
             keep += [(store_physical(s, 0), store_physical(s, STORE_ASSET_SIZE)),

@@ -201,6 +201,7 @@ static void BACKLIGHT_SetHardwareBrightness(uint8_t brightness)
             for (uint32_t i = 0; i < DUTY_CYCLE_LEVELS; i++) {
                 dutyCycle[i] = i < level ? DUTY_CYCLE_ON_VALUE : DUTY_CYCLE_OFF_VALUE;
             }
+            __COMPILER_BARRIER(); // only the DMA reads dutyCycle: stores done before it runs
 
             if (!LL_TIM_IsEnabledCounter(TIMx)) {
                 LL_DMA_EnableChannel(DMA1, DMA_CHANNEL);

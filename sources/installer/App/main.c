@@ -22,7 +22,7 @@
 #include "driver/st7565.h"
 #include "driver/systick.h"
 #include "apps/app_overlay.h"
-#include "pack_inflate.h"
+#include "pack_lzma.h"
 #include "py32f0xx.h"
 #include "store_layout.h"
 
@@ -191,7 +191,7 @@ enum {
 };
 #define INSTALL_MAGIC 0x31534946u /* "FIS1", see tools/build_payload.py */
 
-static fp_inflate decoder;
+static fp_lzma decoder;
 static uint8_t page[256];
 static uint8_t store_head[STORE_DATA_OFFSET]; /* written last */
 static uint32_t ip, op, page_start, page_len;
@@ -403,7 +403,7 @@ static bool drain(bool end)
     return true;
 }
 
-/* Inflate output: literal (distance 0) or copy from `distance` bytes back. */
+/* Decoder output: literal (distance 0) or copy from `distance` bytes back. */
 static bool output(void *unused, unsigned distance, unsigned count, uint8_t literal)
 {
     (void)unused;
@@ -419,6 +419,13 @@ static bool output(void *unused, unsigned distance, unsigned count, uint8_t lite
             return false;
     }
     return true;
+}
+
+/* The byte `distance` back from what the decoder produced. */
+static bool byte_at(void *unused, unsigned distance, uint8_t *b)
+{
+    (void)unused;
+    return distance && distance <= op && filtered_at(op - distance, b);
 }
 
 static uint32_t journal_crc(const journal_t *j)
@@ -504,8 +511,12 @@ __attribute__((noinline)) uint8_t INS_Run(void)
     memset(&decoder, 0, sizeof decoder);
     decoder.input = input;
     decoder.output = output;
-    if (!FP_Inflate(&decoder) || !drain(true) || op != fwlen + storelen || wp != op ||
-        ip != install_meta[META_PACKED_SIZE])
+    decoder.byte_at = byte_at;
+    decoder.total = fwlen + storelen;
+    /* the stream may end with bytes the decoder does not need (its end
+     * marker): the packed CRC checked them all above */
+    if (!FP_Lzma(&decoder) || !drain(true) || op != fwlen + storelen || wp != op ||
+        ip > install_meta[META_PACKED_SIZE])
         return MB_ERR_CRC;
 
     /* 4. Verify, then commit the store header and the slot header. */

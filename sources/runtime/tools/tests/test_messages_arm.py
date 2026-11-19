@@ -33,7 +33,7 @@ stub('PY25Q16_WriteBuffer', lambda *a: (_ for _ in ()).throw(AssertionError('no 
 MSG = 0x20003800      # what FMessage hands over: callsign, 2 bytes, text
 ROWS = 0x20003900     # MSG_Row_t rows[7]
 OUT = 0x20003A00      # ordinal, messages
-ROW = 21              # sizeof(MSG_Row_t)
+ROW = 28              # sizeof(MSG_Row_t): id, marker, line[22]
 
 
 def save(cs, text):
@@ -61,10 +61,11 @@ def fetch(first=0, count=7, selected=0xFFFF):
     call('APP_NativeEnd')
     rows = []
     for i in range(min(count, max(0, total - first))):
-        slot, marker, cs, length, number, text = struct.unpack_from('<BB2sBB15s', u.mem_read(ROWS + i * ROW, ROW))
-        rows.append('----' if marker else cs.decode() + ':' + text[:min(length, 15)].decode())
+        slot, marker, line = struct.unpack_from('<IB22s', u.mem_read(ROWS + i * ROW, ROW))
+        line = line.split(b'\0')[0].decode()          # "01-AB: " and 14 characters
+        rows.append('----' if marker else line[3:5] + ':' + line[7:])
         if not marker:
-            numbers.append(number)
+            numbers.append(int(line[:2]) if line[:2].isdigit() else 0)   # the arrival number
     ordinal, messages = struct.unpack('<HH', u.mem_read(OUT, 4))
     return total, rows, ordinal, messages
 
@@ -80,7 +81,7 @@ assert rec[2 * SIZE + 6] == 64 and bytes(rec[2 * SIZE + 8:2 * SIZE + 72]).starts
 assert struct.unpack_from('<H', rec, SIZE + 2)[0] == 1 and struct.unpack_from('<H', rec, 2 * SIZE + 2)[0] == 2
 assert not erases
 total, rows, ordinal, messages = fetch(selected=1)
-assert rows == ['CD:RDV AU COL 14H ', 'AA:HELLO'] and (total, ordinal, messages) == (2, 2, 2), rows
+assert rows == ['CD:RDV AU COL 14H', 'AA:HELLO'] and (total, ordinal, messages) == (2, 2, 2), rows
 assert numbers[-2:] == [2, 1] and flash[BASE + 72] == 0 and flash[BASE + SIZE + 72] == 1, numbers
 print('PASS records: marker, then messages, written outside the sector cache, commit byte last', flush=True)
 
@@ -88,10 +89,10 @@ print('PASS records: marker, then messages, written outside the sector cache, co
 put8(addr('sessionPending'), 1)  # MSG_SessionStart, inlined into the app launch
 save('EF', 'SECOND SESSION')
 total, rows, ordinal, messages = fetch(selected=0)
-assert rows == ['EF:SECOND SESSION', '----', 'CD:RDV AU COL 14H ', 'AA:HELLO'], rows
+assert rows == ['EF:SECOND SESSION', '----', 'CD:RDV AU COL 14H', 'AA:HELLO'], rows
 assert (total, ordinal, messages) == (4, 1, 3)
 total, rows, ordinal, messages = fetch(first=2, count=2, selected=3)
-assert rows == ['CD:RDV AU COL 14H ', 'AA:HELLO'] and ordinal == 3, rows
+assert rows == ['CD:RDV AU COL 14H', 'AA:HELLO'] and ordinal == 3, rows
 print('PASS a dotted marker between two sessions; counter counts messages only', flush=True)
 
 # Delete: one byte cleared, no erase; a marker left alone is not shown.
@@ -100,7 +101,7 @@ call('MSG_Delete', 4, count=20000000)  # EF: marker, AA, CD, marker, EF
 call('APP_NativeEnd')
 assert flash[BASE + 4 * SIZE + 1] == 0 and not erases
 total, rows, ordinal, messages = fetch()
-assert rows == ['CD:RDV AU COL 14H ', 'AA:HELLO'] and messages == 2, rows
+assert rows == ['CD:RDV AU COL 14H', 'AA:HELLO'] and messages == 2, rows
 save('XY', 'AFTER DELETE')  # the deleted EF keeps its number 3
 numbers.clear()
 assert fetch()[1][0] == 'XY:AFTER DELETE' and numbers[0] == 4, numbers
@@ -158,7 +159,7 @@ save('KL', 'TWO')
 put8(addr('historyMessages'), 1)
 put16(addr('msgIndex'), 0)
 assert call('APP_NativeBegin', 14)
-call('RenderMessagesNative', count=50000000)
+call('RenderJournalNative', count=50000000)
 call('APP_NativeEnd')
 assert u.mem_read(addr('msgCount'), 2) == b'\x03\x00'  # KL, IJ, GH (one session)
 key = lambda k: call('HandleKeyMessages', k, count=50000000)

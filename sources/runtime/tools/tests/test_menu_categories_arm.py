@@ -22,12 +22,12 @@ CATS = ['ALL', 'CHANNELS', 'SCAN', 'KEYS', 'POWER', 'DISPLAY', 'TIMERS', 'AUDIO'
 EXPECTED = {
     'CHANNELS': ['Step', 'POWER', 'RxDCS', 'RxCTCS', 'TxDCS', 'TxCTCS', 'TxODir', 'TxOffs', 'BANDW', 'SetNFM',
                  'Scramb', 'Compnd', 'Mode', 'ChList', 'ChSave', 'ChDele', 'ChName'],
-    'SCAN': ['PRICH1', 'PRICH2', 'PRICH3', 'PRICH4', 'SQLSCN', 'SQLHYS'],
+    'SCAN': ['PRICH1', 'PRICH2', 'PRICH3', 'PRICH4', 'SQLSCN', 'SQLHYS', 'NoiLvOf', 'MaxRX', 'RxHold', 'ScanPS'],
     'KEYS': ['F1Shrt', 'F1Long', 'F2Shrt', 'F2Long', 'M Long', 'KeyLck', 'SetLck', 'BtnInv'],
     'POWER': ['BatSav', 'BatTxt'],
-    'DISPLAY': ['POnMsg', 'PONSCR', 'LIGHT', 'BLTime', 'BLMin', 'BLMax', 'BLTxRx', 'SetCtr', 'SetInv', 'SetMet'],
+    'DISPLAY': ['POnMsg', 'PONSCR', 'LIGHT', 'BLTime', 'BLMin', 'BLMax', 'BLTxRx', 'SetCtr', 'SetInv', 'SetMet', 'PopTim'],
     'TIMERS': ['TxTOut', 'SetTmr'],
-    'AUDIO': ['Mic', 'MicBar', 'SetRxA', 'SetRxG', 'SetVol'],
+    'AUDIO': ['Mic', 'MicBar', 'SetRxF', 'SetRxA', 'SetRxG', 'SetVol'],
     'RADIO': ['Sql', 'STE', 'RP STE', 'Roger', 'AUROG', 'Tone', 'VOX', 'RxMode'],
     'SERVICE': ['F Lock', 'BatCal', 'BatTyp', 'Reset'],  # FrCali: ENABLE_F_CAL_MENU is off
 }

@@ -77,7 +77,7 @@ target_link_libraries(${EXE_NAME} ${TOOLCHAIN_LINK_LIBRARIES})
 if(ENABLE_LTO)
     # Falcon v1.0: extended LTO, preserving the NOR/cache and RAM reflash drivers.
     target_compile_options(${EXE_NAME} PRIVATE $<$<COMPILE_LANGUAGE:C>:-flto=auto>)
-    target_link_options(${EXE_NAME} PRIVATE -flto=auto -Os)
+    target_link_options(${EXE_NAME} PRIVATE -flto=auto -flto-partition=one -Os -nostartfiles)
     set_source_files_properties(
         "${CMAKE_CURRENT_SOURCE_DIR}/App/driver/mb_flash.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/App/driver/py25q16.c"

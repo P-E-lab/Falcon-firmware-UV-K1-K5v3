@@ -100,8 +100,10 @@ call('HandleKeySpectrum', Q['star'], count=5000000)
 assert get8('historyMessages') and get8('SpectrumMonitor') == 0 and rx == [0]
 assert not scan_step()  # the scan pauses on the MESSAGES page
 call('HandleKeySpectrum', Q['star'], count=5000000)
-assert not get8('historyMessages')
-print('PASS * swaps history/MESSAGES pages; MESSAGES stops RX and the scan', flush=True)
+assert get8('historyPocsag')  # 3.5: history -> MESSAGES -> POCSAG
+call('HandleKeySpectrum', Q['star'], count=5000000)
+assert not get8('historyMessages') and not get8('historyPocsag')
+print('PASS * cycles history/MESSAGES/POCSAG pages; MESSAGES stops RX and the scan', flush=True)
 
 for key in [Q['down'], Q['up']]:  # back on the AM entry
     call('HandleKeySpectrum', key, count=5000000)

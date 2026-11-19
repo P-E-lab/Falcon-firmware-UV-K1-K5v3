@@ -367,13 +367,15 @@ static void EditorKeysPopupTall(const char *const *lines, uint8_t count)
     for (uint8_t row = 1; row < count; ++row)
         EditorPopupText5x5(lines[row], x + 3, 3 + row * 8 - 8, strlen(lines[row]));
 }
-void CHANNEL_DrawHistoryHelp(bool messages)
+// page: 0 the history, 1 MESSAGES, 2 POCSAG; * goes on to the next one.
+void CHANNEL_DrawHistoryHelp(uint8_t page)
 {
     static const char *const historyKeys[] = {"M: MENU",      "M LONG: SAVE FREQ", "* LONG: SCAN HISTORY",
                                           "6: DEL ENTRY", "1 LONG: FREQ TO VFO", "SK2: ADD REM BLACKL.",
                                           "*: MESSAGES"};
-    static const char *const messagesKeys[] = {"M: OPEN", "6: DEL ENTRY", "6 LONG: CLEAR ALL", "*: HISTORY"};
-    if (messages)
+    const char *const messagesKeys[] = {"M: OPEN", "6: DEL ENTRY", "6 LONG: CLEAR ALL",
+                                        page == 1 ? "*: POCSAG" : "*: HISTORY"};
+    if (page)
         EditorKeysPopup(messagesKeys, 4, false);
     else
         EditorKeysPopupTall(historyKeys, 7);

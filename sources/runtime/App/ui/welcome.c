@@ -91,7 +91,7 @@ NATIVE_CODE(boot) void UI_DisplayWelcomeNative(void)
     snprintf(text, sizeof text, "%u%%", BATTERY_VoltsToPercent(gBatteryVoltageAverage));
     UI_PrintSmallAt(text, 1, 0, 1, true);
     UI_DrawCompactText5x5("ALL CLEAR", 2, 49);
-    UI_DrawCompactText5x5("FALCON v3", 126 - UI_CompactTextWidth("FALCON v3"), 49);
+    UI_DrawCompactText5x5("FALCON v4", 126 - UI_CompactTextWidth("FALCON v4"), 49);
 
     ST7565_BlitStatusLine();
     ST7565_BlitFullScreen();

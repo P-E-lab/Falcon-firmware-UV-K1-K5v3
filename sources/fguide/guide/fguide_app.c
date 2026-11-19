@@ -1,7 +1,8 @@
 /* FGuide: the Falcon 4K key reference on the radio.
  * Status line: page title (bold) and battery percent.
  * Home: the 10 sections (arrows + MENU, or digit 1-9 / 0 for 10).
- * Section: "KEY: DESCRIPTION" lines in the 5x5 font of the Falcon lists,
+ * Section: two columns, the key in inverse video and its description, a
+ * dotted line between two keys, in the 5x5 font of the Falcon lists,
  * scrolled with the arrows. The text comes from make_text.py (assets, then
  * text_tail when it does not fit). */
 #include <stdint.h>
@@ -234,9 +235,31 @@ static void draw_page(uint8_t s, uint8_t top, uint8_t lines)
     set_title(text_field(&offset));
     status();
     for (uint8_t i = 0; i < top + ROWS_PAGE && i < lines; i++) {
-        const char *text = text_field(&offset);
-        if (i >= top)
-            text5(text, 0, 1u + (i - top) * ROW_H);
+        char *text = (char *)text_field(&offset);
+        if (i < top)
+            continue;
+        const uint8_t y = 1u + (i - top) * ROW_H;
+        if (*text == ' ') { /* description line */
+            text5(text + 1, 41, y);
+            continue;
+        }
+        if (i > top) /* dotted line between two keys */
+            for (uint8_t x = 0; x < 124u; x += 2)
+                A->fb[(y - 1u) >> 3][x] |= (uint8_t)(1u << ((y - 1u) & 7u));
+        uint8_t width = 37; /* key column */
+        if (*text == 'K') {
+            text5(text + 7, 41, y);
+            text[7] = 0;
+        } else {
+            uint8_t n = 0;
+            while (text[1 + n])
+                n++;
+            width = n * 6u;
+        }
+        text5(text + 1, 1, y);
+        for (uint8_t py = y; py <= y + 5u; py++) /* inverse video */
+            for (uint8_t x = 0; x <= width; x++)
+                A->fb[py >> 3][x] ^= (uint8_t)(1u << (py & 7u));
     }
     scroll_bar(top, ROWS_PAGE, lines, 56);
     A->blit_full();

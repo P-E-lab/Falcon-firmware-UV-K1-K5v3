@@ -234,6 +234,13 @@ static NATIVE_CODE(menu) void MenuOption(int m, int32_t v, char *s)
         case MENU_SQLSCN:
             sprintf(s, "%d dbm", (int)v - 130);
             break;
+        case MENU_NOILVOF:
+        case MENU_MAXRX:
+        case MENU_RXHOLD:
+        case MENU_SCANPS:
+        case MENU_POPTIM:
+            APP_ScanMenuText(s, m, v);
+            break;
         case MENU_LED:
             FP_CopyString(s, gSubMenu_LED[v], sizeof(gSubMenu_LED[v]));
             break;
@@ -252,14 +259,15 @@ static NATIVE_CODE(menu) void MenuOption(int m, int32_t v, char *s)
             if (!v)
                 strcpy(s, "OFF");
             else
-                sprintf(s, "D%03o%c", DCS_GetOption(v < 105 ? v - 1 : v - 105), v < 105 ? 'N' : 'I');
+                sprintf(s, "%02u-D%03o%c", v < 105 ? v : v - 104, DCS_GetOption(v < 105 ? v - 1 : v - 105),
+                        v < 105 ? 'N' : 'I');
             break;
         case MENU_R_CTCS:
         case MENU_T_CTCS:
             if (!v)
                 strcpy(s, "OFF");
             else
-                sprintf(s, "%u.%uHz", CTCSS_Options[v - 1] / 10, CTCSS_Options[v - 1] % 10);
+                sprintf(s, "%02u-%u.%u", v, CTCSS_Options[v - 1] / 10, CTCSS_Options[v - 1] % 10);
             break;
         case MENU_SFT_D:
             FP_CopyString(s, gSubMenu_SFT_D[v], sizeof(gSubMenu_SFT_D[v]));
@@ -404,12 +412,8 @@ static NATIVE_CODE(menu) void MenuOption(int m, int32_t v, char *s)
             FP_CopyString(s, gSubMenu_SET_LCK[v], sizeof(gSubMenu_SET_LCK[v]));
             break;
         case MENU_SET_AUD:
-            if (gTxVfo->Modulation == MODULATION_USB)
-                strcpy(s, "N/A");
-            else
-                FP_CopyString(
-                    s, gTxVfo->Modulation == MODULATION_AM ? gSubMenu_SET_AUD_AM[v] : gSubMenu_SET_AUD_FM[v],
-                    8);
+        case MENU_SET_AUDA:
+            FP_CopyString(s, m == MENU_SET_AUD ? gSubMenu_SET_AUD_FM[v] : gSubMenu_SET_AUD_AM[v], 8);
             break;
 #ifdef ENABLE_FEAT_F4HWN_NARROWER
         case MENU_SET_NFM:

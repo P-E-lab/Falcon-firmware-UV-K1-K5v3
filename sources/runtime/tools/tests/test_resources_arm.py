@@ -26,6 +26,14 @@ def gold(name):
   rxg=rows[at][7]+1
   rows=[row[:7]+bytes([row[7]+(row[7]>=rxg and row[7]!=0xff)]) for row in rows]
   rows.insert(at+1,b'SetRxG\0'+bytes([rxg]))
+  # 3.4.0: VFO scan entries after SQLHYS, PopTim after SetMet, SetRxA split
+  # into SetRxF (the old id) and SetRxA; new ids follow SQLHYS's.
+  name=lambda row:row[:7].split(b'\0')[0]
+  at=next(i for i,row in enumerate(rows) if name(row)==b'SQLHYS');h=rows[at][7]
+  for k,n in enumerate([b'NoiLvOf',b'MaxRX',b'RxHold',b'ScanPS']):rows.insert(at+1+k,n.ljust(7,b'\0')+bytes([h+1+k]))
+  at=next(i for i,row in enumerate(rows) if name(row)==b'SetMet');rows.insert(at+1,b'PopTim\0'+bytes([h+5]))
+  at=next(i for i,row in enumerate(rows) if name(row)==b'SetRxA')
+  rows[at]=b'SetRxF\0'+rows[at][7:];rows.insert(at+1,b'SetRxA\0'+bytes([h+6]))
   value=b''.join(rows)
  return value
 scratch=0x20005000

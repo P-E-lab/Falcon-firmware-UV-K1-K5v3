@@ -1,4 +1,4 @@
-# Falcon v3.2.0-OA
+# Falcon v4.0.0
 
 **English** | [Français](README.fr.md) | [Español](README.es.md) | [Русский](README.ru.md)
 
@@ -8,20 +8,26 @@ Firmware for UV-K1 / K5(v3), derived from [Sonic](https://github.com/Robby69400/
 - Full Watch follows both VFOs and up to four priority channels; Multilist Watch scans your memory lists in the background.
 - Scan straight from the VFO: Long * scans the channel's list, F + * scans all channels in FastScan, with A and B in frequency mode Long * scans the range between them, and the BAND SCAN shortcut scans a saved band, keeping the VFO display.
 - Spectrum and Sentinel scan lists, bands or ranges, with a History of up to 200 detections and blacklists; Spectrum adds a waterfall (key 8) and a zoom around the last reception (key 4).
+- SKIP MEM (key 7) hides the frequencies already in memory in Spectrum and Sentinel; SPECTRE VFO opens Spectrum around the VFO frequency; the processor sleeps between tasks for a longer battery life.
 - Channels, lists and bands can be created and edited directly from the keypad.
 - Falcon apps: FMessage sends and receives 64-character FSK text messages between radios; messages are saved on the radio, accessible from the VFO (MESSAGES shortcut) or with the FMessage app (VFO shortcut also available). It sends a call with a melody and shows which radios are present with the app open (melody and callsign set in FMessageOption); each radio that acknowledged the last message is marked with a +. FCatch (Close Call capture) for VHF and UHF signals, FirstAid, FSurvival and FMorse for emergency situations, FGuide (firmware keys and shortcuts guide), FSystemInfo, and FSnake (open walls, keys 3/7 for both directions) complete the F4HWN catalogue.
+- POCSAG Scan (1200 / 512 bauds, 512 characters, journal in the History) and FKeys (reassign the long and F+ keys) join the Falcon apps; the app API is at level 4, compatible with F4HWN v7.
 - One-file install, multiboot with Sonic and F4HWN (apps supported), and two editions: Falcon 4K (4096 channels) and Falcon 1K (1024 channels with their own settings).
 - Falcon firmware is coded using Claude Code.
 
-**User guide (EN): [docs/Falcon_v3.2.0_User_Guide_EN.pdf](docs/Falcon_v3.2.0_User_Guide_EN.pdf)**. The guide of each version is also attached to the [Releases](../../releases).
+**User guide (EN): [docs/Falcon_v4.0.0_User_Guide_EN.pdf](docs/Falcon_v4.0.0_User_Guide_EN.pdf)**. The guide of each version is also attached to the [Releases](../../releases).
+
+**Compatibility (4.0.0):** V4 changes the layout of the external memory. On one radio, all the Falcon firmwares installed in multiboot must move to V4 together; a Falcon 3.x in another slot would lose its modules. The POCSAG Scan, FCatch, FKeys and FMessage apps must be updated with V4. Channels and settings are kept; use the CHIRP 4.0.0 drivers.
 
 ## Contents
 
-- `firmware/Falcon4K_v3.2.0-OA.bin`: firmware and all-in-one automatic installer (3.2.0: Spectrum waterfall and zoom, BAND SCAN shortcut, lighter VFO scans; full changelog on the first page of the user guide).
-- `firmware/Falcon1K_v3.2.0-OA.bin`: Falcon 1K, the same version with 1024 channels kept in its own slot's settings (F4HWN layout). In multiboot with Sonic 4K, each one keeps its own settings and channels. Falcon 4K shares its 4096 channels with Sonic 4K.
-- `Falcon apps/FGuide.app`: Falcon key reference on the radio (10 sections, in English), version 1.1 for Falcon 3.2.0.
+- `firmware/f4hwn.falcon-4k.v4.0.0.bin`: firmware and all-in-one automatic installer (4.0.0: SKIP MEM, SPECTRE VFO, CPU sleep, app API level 4, POCSAG page, 30 lists; full changelog on the first page of the user guide). The file name gives "Falcon 4k" in the UV Studio multiboot list.
+- `firmware/f4hwn.falcon-1k.v4.0.0.bin`: Falcon 1K, the same version with 1024 channels kept in its own slot's settings (F4HWN layout). In multiboot with Sonic 4K, each one keeps its own settings and channels. Falcon 4K shares its 4096 channels with Sonic 4K.
+- `Falcon apps/FGuide.app`: Falcon key reference on the radio (10 sections, in English), version 4.0.0 for Falcon 4.0.0.
 - `Falcon apps/FSystemInfo.app`: Falcon system information (firmware, memory, stack, battery, identity).
 - `Falcon apps/FCatch.app`: Close Call capture of nearby transmitters, with tone, memory channel name, VHF / UHF / VHF+UHF choice, frequency blocking (SK2) and a saved 17-entry history (Falcon 3.1.1 or later).
+- `Falcon apps/POCSAGScan.app`: POCSAG Scan 2.1F, pager messages (1200 / 512 bauds) on the POCSAG memory list, journal in the History (Falcon 4.0 only).
+- `Falcon apps/FKeys.app`: FKeys 4.0.0, reassigns the long and F+ keys of the VFO screen (presets FALCON, F4HWN, SONIC or custom).
 - `Falcon apps/FirstAid.app`: first aid steps (ERC 2025) and CPR metronome.
 - `Falcon apps/FSurvival.app`: survival tips and SOS torch beacon.
 - `Falcon apps/FMorse.app`: Morse messages by light or radio (formerly Morse).
@@ -29,14 +35,16 @@ Firmware for UV-K1 / K5(v3), derived from [Sonic](https://github.com/Robby69400/
 - `Falcon apps/Translations`: FirstAid and FSurvival in French (FR), Spanish (ES) and Polish (PL).
 - `Falcon apps/FMessage.app` and `Falcon apps/FMessageOption.app`: messaging between radios (FMessage 3.0) and its settings ("FMessOption" in the apps list). Install both.
 - `F4WHN apps`: the 46 official F4HWN apps available (version 6.3.0), optional.
-- `chirp/falcon4k.chirp.v3.2.0.py`: Falcon 4K CHIRP driver, with the four priority channels, SetRxG and the REVERSE FQ, MESSAGES, FMESSAGE and BAND SCAN shortcuts.
-- `chirp/falcon1k.chirp.v3.2.0.py`: Falcon 1K CHIRP driver (memories 995 to 1024: the bands). Each driver refuses the other edition.
+- `chirp/falcon4k.chirp.v4.0.0.py`: Falcon 4K CHIRP driver, with the four priority channels, SetRxG and the REVERSE FQ, MESSAGES, FMESSAGE and BAND SCAN shortcuts, 30 lists, the SCAN and DISPLAY menus and the FKeys key table.
+- `chirp/falcon1k.chirp.v4.0.0.py`: Falcon 1K CHIRP driver (memories 995 to 1024: the bands). It accepts Falcon 1K 4.0 only; each driver refuses the other edition.
 - `sources/runtime`: complete firmware sources, drivers and embedded dependencies.
 - `sources/installer`: sources of the temporary installer (it reuses the drivers of `sources/runtime`).
 - `sources/fguide`, `sources/fsysteminfo`: sources of FGuide and FSystemInfo.
 - `sources/fcatch`: sources of FCatch (capture and tones derived from FSearch / GOGUFW Search, Apache-2.0).
 - `sources/firstaid`, `sources/fsurvival`, `sources/fmorse`, `sources/fsnake`: sources of FirstAid, FSurvival (with their translations), FMorse and FSnake.
 - `sources/fmessage`: sources and tests of FMessage and FMessOption.
+- `sources/pocsagrx`: sources of POCSAG Scan (from Armel F4HWN's POCSAG RX, Apache-2.0).
+- `sources/fkeys`: sources of FKeys.
 - `tools`, `validation/tests`, `Dockerfile`, `build-with-docker.sh`: build and tests.
 - `LICENSE`, `NOTICE`: licenses and attributions. Third-party sources keep their notices.
 
@@ -48,9 +56,9 @@ To keep the main firmware: boot that firmware, open Firmware Slots in UVStudio, 
 
 To replace the main firmware: use Firmware Flash / DFU with the same BIN.
 
-At first start, let the "FALCON v3.2.0" and "Powering Up" install screen finish its work until the automatic restart. Do not cut the power during the install; an interrupted install is resumed at the next start, in the same slot. No "Install assets" click is needed.
+At first start, let the "FALCON v4.0.0" and "Powering Up" install screen finish its work until the automatic restart. Do not cut the power during the install; an interrupted install is resumed at the next start, in the same slot. No "Install assets" click is needed.
 
-If the install screen shows `S 04 E 10`, the install was refused without erasing anything: the Falcon area holds apps written by another firmware (app slots 80 to 99 of a future F4HWN). Press PTT to restore the main firmware.
+If the install screen shows `S 04 E 10`, the install was refused without erasing anything: the Falcon area holds apps written by another firmware (app slots 69 to 98 of a future F4HWN). Press PTT to restore the main firmware.
 
 If Falcon shows "MODULES MISSING / REINSTALL FALCON", its modules in external memory were erased or replaced: write the same BIN again.
 
@@ -59,7 +67,7 @@ The apps (those of `Falcon apps` and `F4WHN apps`) are installed separately from
 ## Memory layout
 
 - Internal flash: the core of the firmware.
-- External memory, per firmware slot: the code modules (loaded on demand into 4 KB of RAM, DMA read and checked by the hardware CRC; a module can write the flash or call another module, and it is reloaded before returning to it) and the resources (fonts, menu texts). They use the slot's v7 asset zone (0x1CA000 + slot × 16 KB) and a 32 KB bank at the end of the v7 Apps reserve (0x1A2000 + slot × 32 KB, app slots 80 to 99). The 64 app slots, the configuration, the calibration and the channels are never touched. See `sources/runtime/App/store_layout.h`.
+- External memory, per firmware slot: the code modules (loaded on demand into 4 KB of RAM, DMA read and checked by the hardware CRC; a module can write the flash or call another module, and it is reloaded before returning to it) and the resources (fonts, menu texts). They use the slot's v7 asset zone (0x1CA000 + slot × 16 KB) and a 48 KB bank in the v7 Apps reserve (0x18C000 + slot × 48 KB, app slots 69 to 98), after the POCSAG journal (0x182000, 32 KB) and 8 KB kept for MESSAGES (0x18A000). The 64 app slots, the configuration, the calibration and the channels are never touched. See `sources/runtime/App/store_layout.h`.
 - The display only receives the changed lines, with a complete frame at least once per second.
 
 ## How this version works
@@ -73,6 +81,8 @@ After directly entering a channel number without a list, the arrows browse the c
 History: the "HISTORY" action (F1/F2 short or long, M long) opens the history from the VFO, without starting a scan; the title moves to the status bar and the list gains a line. In Spectrum, Sentinel and from the VFO, a listened entry (arrows) uses its own modulation and bandwidth; long press on 1: the entry's frequency goes to the main VFO (frequency mode) and the screen returns to the VFO.
 
 Messages: `*` switches between the HISTORY page and the MESSAGES page (the scan and the reception are stopped on MESSAGES). Each message received by FMessage is saved there automatically (external memory 0x012000, two 4 KB sectors, a free area in F4HWN); the 32 latest are listed as "01-AA: START", newest first, with an arrival number from 01 to 32 (it does not change after a deletion and restarts at 01 after CLEAR ALL) and a dotted line between two FMessage sessions. `M` opens the message, `6` deletes it (DELETE?), long `6` clears everything (CLEAR ALL?). The "MESSAGES" action (F1/F2, M long) opens the history directly on this page. Screen, reading and deletion are in the external "messages" module. The RX/TX log no longer exists.
+
+POCSAG: a second `*` opens the POCSAG page, which reads the journal written by POCSAG Scan (external memory 0x182000, 8 sectors, up to 512 characters per page, kept after power-off); same keys as MESSAGES.
 
 FMessage: the "FMESSAGE" action (F1/F2, M long) opens the FMessage app (app shortcut 15); double beep if it is not installed.
 
@@ -118,6 +128,8 @@ bash sources/fguide/guide/build.sh
 bash sources/fsysteminfo/sysinfo/build.sh
 bash sources/fmessage/fmessage/build.sh
 bash sources/fmessage/fmsgoption/build.sh
+bash sources/fkeys/keys/build.sh
+bash sources/pocsagrx/pocsagrx/make.sh
 ```
 
 ## Tests

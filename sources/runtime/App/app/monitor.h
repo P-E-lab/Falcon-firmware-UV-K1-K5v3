@@ -21,7 +21,7 @@ void CHANNEL_ProcessKeys(KEY_Code_t key, bool pressed, bool held);
 void CHANNEL_Display(void);
 
 void CHANNEL_DrawSelectionHelp(uint8_t kind);
-void CHANNEL_DrawHistoryHelp(bool messages);
+void CHANNEL_DrawHistoryHelp(uint8_t page); /* 0 history, 1 MESSAGES, 2 POCSAG */
 void CHANNEL_DrawParametersHelp(void);
 void CHANNEL_DrawKeysInfos(void);
 void CHANNEL_DrawKeysInfosLabel(const char *);

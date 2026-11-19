@@ -67,8 +67,10 @@ def set_menu(values):
  put16(addr('UOO_trigger'),record);put8(addr('settings')+Q['bwoff'],fm)
 def menu_values():
  return (get16('SpectrumDelay'),get8('IndexMaxLT'),get8('Noislvl_OFF'),get16('UOO_trigger'),get8('IndexPS'),get8('osdPopupIndex'),get8('gSetting_set_audio_am'),get8('PttEmission'),get8('Ptt2Emission'),get8('gMonitorScan'),get8('SoundBoost'),get8('AUTO_KEYLOCK'),get8('scanMenuModulation'),get8('scanMenuBandwidth'),u.mem_read(addr('settings')+Q['bwoff'],1)[0],get8('listenBwAM'))
-a=(3000,3,35,7,2,5,2,0,2,0,1,2,Q['ammod'],3,2,1)
-b=(6000,6,48,10,4,1,1,2,0,1,0,1,Q['fm'],0,0,0)
+# 3.4.0: popup (PopTim) and AM audio are general settings, the same in both views.
+put8(addr('gPopTim'),3)
+a=(3000,3,35,7,2,3,1,0,2,0,1,2,Q['ammod'],3,2,1)
+b=(6000,6,48,10,4,3,1,2,0,1,0,1,Q['fm'],0,0,0)
 set_menu(a);call('SaveSettings',0,count=5000000)
 call('SelectScanProfile',1,count=5000000);assert get16('SpectrumDelay')==0
 set_menu(b);call('SaveSettings',0,count=5000000)
@@ -78,7 +80,7 @@ for view,want in [(0,a),(1,b),(0,a),(1,b)]:
 print('PASS all menu settings independent, alternating views and cold reloads; both bandwidths, modulation, AM audio, PTTs, RX delay, power, popup, lock, noise/record',flush=True)
 # Render all rows, checking the requested order, record-only Sentinel row,
 # exact 2-pixel value margin and footer identical to the Scanlists page.
-expected=['PTT:','PTT2:','MONITOR CH:','RX DELAY:','MAXLISTENTIME:','MODULATION:','LISTENBW FM:','LISTENBW AM:','AM AUDIO:','SOUNDBOOST:','NOIS LVL OFF:','RECORD TRIG:','POWER SAVE:','POPUPS:','KEYLOCK:']
+expected=['PTT:','PTT2:','MONITOR CH:','SKIP MEM:','SKIPMEM TOL:','RX DELAY:','MAXLISTENTIME:','MODULATION:','LISTENBW FM:','LISTENBW AM:','SOUNDBOOST:','NOIS LVL OFF:','RECORD TRIG:','POWER SAVE:','KEYLOCK:']
 scratch=0x20005800
 from PIL import Image
 def frame():return bytes(u.mem_read(addr('gFrameBuffer'),896))

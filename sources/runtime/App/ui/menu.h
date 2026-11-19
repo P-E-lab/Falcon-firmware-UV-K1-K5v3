@@ -105,8 +105,15 @@ enum {
     MENU_PRICH3,
     MENU_PRICH4,
     MENU_SQLSCN,
-    MENU_SQLHYS
+    MENU_SQLHYS,
+    MENU_NOILVOF, // VFO scans: noise level that closes the RX
+    MENU_MAXRX,   // VFO scans: longest reception before moving on
+    MENU_RXHOLD,  // VFO scans: wait after a reception
+    MENU_SCANPS,  // VFO scans: power save between passes
+    MENU_POPTIM,  // popup duration, Spectre, Sentinel and VFO scans
+    MENU_SET_AUDA // AM audio profile (MENU_SET_AUD is the FM one)
 };
+#define MENU_LAST_ID MENU_SET_AUDA
 
 static inline uint8_t MENU_PriorityIndex(uint8_t id)
 {

@@ -346,7 +346,8 @@ static void received(void)
     cp2(r->cs, from), r->id = (uint8_t)id, r->unread = 1;
     memcpy(r->text, f + 8, f[7]), r->text[f[7]] = 0;
     /* Falcon 3.0 keeps it for its MESSAGES page: API level 3 with message_save */
-    if (A->api_level == 3u && A->api_size >= sizeof(app_api_t)) A->message_save(r, f[7]);
+    if (A->api_level >= 4u && A->api_size > 416u) /* Falcon 4.0 table */
+        A->message_save(r, f[7]);
     if (g.screen == S_INBOX && g.sel + 1u < g.nrecv) g.sel++;
     if (g.screen == S_MSG && g.item < N_RECV - 1u) g.item++;
     /* backlight on a message as the radio's own setting says (RX or TX/RX) */

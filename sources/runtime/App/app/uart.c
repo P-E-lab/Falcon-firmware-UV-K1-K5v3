@@ -249,9 +249,9 @@ static void SendReply(uint32_t Port, void *pReply, uint16_t Size)
 /* Falcon 1K answers "3.2K": its channels are not at the 4K driver's
  * addresses, so each CHIRP driver accepts only its own edition. */
 #ifdef ENABLE_1024
-#define FALCON_HELLO "FALCON 7.0/3.2K"
+#define FALCON_HELLO "FALCON 7.0/4.0K"
 #else
-#define FALCON_HELLO "FALCON 7.0/3.2"
+#define FALCON_HELLO "FALCON 7.0/4.0"
 #endif
 
 static void SendVersion(uint32_t Port)
@@ -554,6 +554,9 @@ bool UART_IsCommandAvailable(uint32_t Port)
     else {
         return false;
     }
+    /* The ring is filled by DMA (UART) or the USB ISR (VCP): read its bytes
+     * only after the write position above. Emits no instruction. */
+    __COMPILER_BARRIER();
 
     // Limit iterations to prevent long loops when buffer is full of non-command data
     uint16_t maxIterations = ReadBufSize + 1;

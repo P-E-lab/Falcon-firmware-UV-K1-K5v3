@@ -117,6 +117,7 @@ void (*action_opt_table[])(void) = {
     [ACTION_OPT_FMESSAGE] = &FUNCTION_NOP,
 #endif
     [ACTION_OPT_BAND_SCAN] = &APP_RunBandScan,
+    [ACTION_OPT_SPECTRE_VFO] = &APP_RunSpectreVfo,
 };
 
 static_assert(ARRAY_SIZE(action_opt_table) == ACTION_OPT_LEN);
@@ -196,7 +197,7 @@ static void ACTION_ChangeScanList(int8_t direction)
     const uint16_t currentChannel = gEeprom.ScreenChannel[vfo];
     if (!IS_MR_CHANNEL(currentChannel) || gCurrentFunction == FUNCTION_TRANSMIT)
         return;
-    // Cycle: lists 1..25, then the memories without a list (NONE), the monitor
+    // Cycle: lists 1..30, then the memories without a list (NONE), the monitor
     // memories (list 51, MONI) and the band memories (BAND), back to list 1.
     const ChannelAttributes_t *current = MR_GetChannelAttributes(currentChannel);
     uint8_t origin = current ? ScanListRank(currentChannel, current->scanlist) : 0;

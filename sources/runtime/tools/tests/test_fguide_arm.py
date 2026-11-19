@@ -90,7 +90,9 @@ for f in frames[3:-1]:
         distinct.append(f)
 png(distinct[0], 'fguide_page10.png')
 png(distinct[-1], 'fguide_page10_end.png')
-assert len(distinct) == 23 - 8 + 1, len(distinct)  # every scroll step down to the last line
+import sys as _sys; _sys.path.insert(0, str(ROOT.parent / 'fguide/guide'))
+from make_text import section_lines as _lines; from content import SECTIONS as _S
+assert len(distinct) == len(_lines(_S[9][2])) - 8 + 1, len(distinct)  # every scroll step down to the last line
 status = bytes(u.mem_read(addr('gStatusLine'), 128))
 assert any(status[30:98]) and any(status[104:]), 'centered title and battery percent'
 print('PASS FGuide: real loader, home list and selection, digit opens a section, held arrow scrolls to its '

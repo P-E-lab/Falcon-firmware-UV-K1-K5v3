@@ -5,9 +5,8 @@ Layout (all lengths are bytes):
   N x { u16 offset, u8 line_count }            section table
   per section at its offset:
     u8 n, home label    u8 n, page title    line_count x { u8 n, line }
-Entries read "KEY: TEXT", or TEXT alone indented under the previous key,
-wrapped to LINE_CHARS (5x5 font, 6 px per glyph); continuation lines are
-indented by INDENT spaces. The first ASSET_MAX bytes go to the app assets,
+Entries: the key in inverse video, its text under it (see entry_lines);
+short NAME VALUE lists are tables, one row each. The first ASSET_MAX bytes go to the app assets,
 the rest to text_tail.h (code rodata), with the section count and the
 section opened by MENU and the interface strings (UI_*).
 """
@@ -28,25 +27,48 @@ HOME_CHARS = 17   # after the section number
 ALLOWED = set(' !"#$%&\'()*+,-./0123456789:;<=>?ABCDEFGHIJKLMNOPQRSTUVWXYZ[]_')
 
 
-def entry_lines(key, desc):
-    words = (key + (': ' + desc if desc else '') if key else desc).split()
-    lines, line = [], '' if key else ' ' * INDENT
-    for word in words:
-        assert len(word) <= LINE_CHARS - INDENT, word
-        if line.strip() and len(line) + 1 + len(word) > LINE_CHARS:
+STEP_CHARS = 19   # under a key, from x 8
+NUM_CHARS = 18    # beside a step number, from x 14
+
+
+def wrap(text, width):
+    lines, line = [], ''
+    for word in text.split():
+        assert len(word) <= width, word
+        if line and len(line) + 1 + len(word) > width:
             lines.append(line)
-            line = ' ' * INDENT + word
+            line = word
         else:
-            line = (line + ' ' + word) if line.strip() else line + word
-    lines.append(line)
-    return lines
+            line = (line + ' ' + word) if line else word
+    return lines + [line] if line else lines
+
+
+def is_table(rows):
+    """A list of short "NAME VALUE" rows (the emergency numbers): one line each."""
+    return all(len(k) > 2 and len(k) + len(d) + 1 <= LINE_CHARS for k, d in rows)
+
+
+def entry_lines(key, desc, table=False):
+    """First char of each line: 'R' table row "NAME|VALUE"; 'K' key alone, in
+    inverse video; 'N' step number (2 chars) and its first text line; 'U' text
+    beside a step number; 'T' text under a key ('- ' when it has no key)."""
+    if table:
+        return ['R' + key + '|' + desc]
+    if key and len(key) <= 2:
+        text = wrap(desc, NUM_CHARS)
+        return ['N' + key.ljust(2) + text[0]] + ['U' + t for t in text[1:]]
+    if key:
+        return ['K' + key] + ['T' + t for t in wrap(desc, STEP_CHARS)]
+    text = wrap(desc, STEP_CHARS - 2)
+    return ['T- ' + text[0]] + ['T  ' + t for t in text[1:]]
 
 
 def section_lines(rows):
+    table = is_table(rows)
     out = []
     for key, desc in rows:
         assert set(key) <= ALLOWED and set(desc) <= ALLOWED, (key, desc)
-        out += entry_lines(key, desc)
+        out += entry_lines(key, desc, table)
     return out
 
 

@@ -16,5 +16,5 @@ for EDITION in 1K 4K; do
     cmake --preset S4K -S sources/installer -B sources/installer/build/S4K -DTARGET=falcon.installer \
         "-DINSTALL_EDITION=Falcon $EDITION"
     cmake --build sources/installer/build/S4K -j
-    cp sources/installer/build/S4K/falcon.installer.bin "firmware/Falcon${EDITION}_v${VERSION}-OA.bin"
+    cp sources/installer/build/S4K/falcon.installer.bin "firmware/f4hwn.falcon-$(echo "$EDITION" | tr K k).v${VERSION}.bin"
 done

@@ -174,12 +174,20 @@ uint16_t MSG_Fetch(uint16_t first, MSG_Row_t *rows, uint8_t count, uint16_t sele
                 if (row >= first && row - first < count) {
                     MSG_Row_t *r = &rows[row - first];
                     r->marker = isMarker;
-                    r->slot = slot;
+                    r->id = slot;
                     if (!isMarker) {
-                        memcpy(r->cs, h.cs, 2);
-                        r->len = h.len;
-                        PY25Q16_ReadPhysical(SlotAddress(slot) + sizeof h, r->text, sizeof r->text);
-                        PY25Q16_ReadPhysical(SlotAddress(slot) + MSG_NUMBER, &r->number, 1);
+                        // "01-AB: " and the first 14 characters.
+                        uint8_t number;
+                        char *t = r->line;
+                        PY25Q16_ReadPhysical(SlotAddress(slot) + MSG_NUMBER, &number, 1);
+                        if (number && number <= MSG_SHOWN_MAX)
+                            t[0] = '0' + number / 10u, t[1] = '0' + number % 10u;
+                        else
+                            t[0] = t[1] = '-';
+                        t[2] = '-', t[3] = h.cs[0], t[4] = h.cs[1], t[5] = ':', t[6] = ' ';
+                        const uint8_t n = h.len < 14u ? h.len : 14u;
+                        PY25Q16_ReadPhysical(SlotAddress(slot) + sizeof h, t + 7, n);
+                        t[7 + n] = 0;
                     }
                 }
                 if (!isMarker && row == selected && ordinal)

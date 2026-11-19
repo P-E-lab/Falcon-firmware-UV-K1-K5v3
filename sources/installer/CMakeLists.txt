@@ -38,7 +38,7 @@ target_link_libraries(${EXE_NAME} Core App)
 target_link_libraries(${EXE_NAME} ${TOOLCHAIN_LINK_LIBRARIES})
 
 target_compile_options(${EXE_NAME} PRIVATE $<$<COMPILE_LANGUAGE:C>:-flto=auto>)
-target_link_options(${EXE_NAME} PRIVATE -flto=auto -Os)
+target_link_options(${EXE_NAME} PRIVATE -flto=auto -flto-partition=one -Os -nostartfiles)
 set_source_files_properties(
     "${RUNTIME_DIR}/App/driver/mb_flash.c"
     "${RUNTIME_DIR}/App/driver/py25q16.c"

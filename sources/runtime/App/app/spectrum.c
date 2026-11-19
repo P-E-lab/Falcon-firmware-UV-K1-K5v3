@@ -61,6 +61,7 @@ const uint16_t jumpSizes[24] = {1,    5,    10,   25,   50,   3000, 2500, 2500, 
 #include "app/scan_wake.h"
 #ifdef ENABLE_FALCON_MESSAGES
 #include "app/messages.h"
+#include "app/pocsaglog.h"
 #endif
 // ============================================================
 // SECTION: Compile-time configuration
@@ -86,6 +87,7 @@ static uint16_t vfoScanSide2Ticks;
 static SpectrumActivity activity __attribute__((section(".app_scratch"), aligned(4)));
 static int16_t spectrumRxDbm = INT16_MIN;
 static bool spectrumRxDbmFresh;
+static uint8_t spectrumRxDbmSettle; // listening ticks before the settled dBm reading
 static bool sentinelView;
 static bool scanOptionsChanged;
 static bool scanNoList, scanEmpty;
@@ -144,15 +146,30 @@ static uint32_t SpectrumRangeStop = FMIN;
 static int clamp(int v, int min, int max);
 uint8_t gVfoScanSQL = 30, gSpectrumSQL = 30, gScanSQLHys;
 uint16_t gScanSqlPreview;
+uint8_t gScanNoiLvOf = 40, gScanMaxRx, gScanRxHold, gScanPS, gPopTim = 1;
+// After the scan settings (ADRESS_PARAMS + 0..127): tag, NoiLvOf, MaxRX,
+// RxHold, ScanPS, PopTim. Erased: the defaults, PopTim from Spectre's POPUPS.
+#define ADRESS_SCAN_MENU (ADRESS_PARAMS + 0x80)
+#define SCAN_MENU_GENERAL_TAG 0xC7u
 void APP_LoadScanSQL(void)
 {
-    uint8_t data[3];
+    uint8_t data[6];
     PY25Q16_ReadBuffer(ADRESS_PARAMS + 18, data, 3);
     gVfoScanSQL = data[0] == 0xD2 && data[1] <= 77 ? data[1] : 30;
     gSpectrumSQL = data[0] == 0xD2 && data[2] <= 77 ? data[2] : 30;
     uint8_t hys;
     PY25Q16_ReadBuffer(ADRESS_PARAMS + 41, &hys, 1);
     gScanSQLHys = (hys & 0xF0u) == 0xA0u && (hys & 15u) <= 8 ? (hys & 15u) : 0;
+    PY25Q16_ReadBuffer(ADRESS_SCAN_MENU, data, 6);
+    if (data[0] != SCAN_MENU_GENERAL_TAG) {
+        PY25Q16_ReadBuffer(ADRESS_PARAMS + 0x56, data + 5, 1); // Spectre's old POPUPS (osdPopupIndex)
+        data[1] = 40, data[2] = data[3] = data[4] = 0;
+    }
+    gScanNoiLvOf = data[1] <= 80 ? data[1] : 40;
+    gScanMaxRx = data[2] < SCAN_MAXRX_COUNT ? data[2] : 0;
+    gScanRxHold = data[3] < SCAN_RXHOLD_COUNT ? data[3] : 0;
+    gScanPS = data[4] < SCAN_PS_COUNT ? data[4] : 0;
+    gPopTim = data[5] < SCAN_POPTIM_COUNT ? data[5] : 1;
 }
 void APP_SaveScanSQL(void)
 {
@@ -160,6 +177,8 @@ void APP_SaveScanSQL(void)
     PY25Q16_WriteBuffer(ADRESS_PARAMS + 18, data, 3, false);
     const uint8_t hys = 0xA0u | gScanSQLHys;
     PY25Q16_WriteBuffer(ADRESS_PARAMS + 41, &hys, 1, false);
+    const uint8_t menu[6] = {SCAN_MENU_GENERAL_TAG, gScanNoiLvOf, gScanMaxRx, gScanRxHold, gScanPS, gPopTim};
+    PY25Q16_WriteBuffer(ADRESS_SCAN_MENU, menu, 6, false);
 }
 void APP_AdjustScanSQL(int direction)
 {
@@ -199,6 +218,10 @@ static uint8_t PttEmission = 0, Ptt2Emission;
 static KEY_Code_t spectrumPtt2Key = KEY_INVALID;
 static uint8_t scanMenuModulation = UINT8_MAX, scanMenuBandwidth;
 static bool gMonitorScan = true;
+// SKIP MEM: band/range detections on a memory frequency (+/- SkipMemHys) are passed over.
+static bool skipMem;
+static uint8_t skipMemHys = 4;
+static const uint16_t skipMemHysValues[] = {0, 100, 250, 500, 625, 1250, 2500}; // 10 Hz units
 static uint16_t stringCodeTimer = 0;
 #define STRINGCODE_TIMEOUT_MS 2 //( x 5s)
 
@@ -208,17 +231,17 @@ enum {
     PARAM_PTT_EMISSION,
     PARAM_PTT2_EMISSION,
     PARAM_MONITOR_SCAN,
+    PARAM_SKIP_MEM,
+    PARAM_SKIP_MEM_HYS,
     PARAM_SPECTRUM_DELAY,
     PARAM_MAX_LISTEN_TIME,
     PARAM_MODULATION,
     PARAM_LISTEN_BW,
     PARAM_LISTEN_BW_AM,
-    PARAM_AUDIO_AM,
     PARAM_SOUND_BOOST,
     PARAM_NOISE_LEVEL_OFF,
     PARAM_RECORD_TRIGGER,
     PARAM_POWER_SAVE,
-    PARAM_OSD_POPUP,
     PARAM_AUTO_KEYLOCK,
     PARAM_COUNT
 };
@@ -270,6 +293,40 @@ static uint8_t IndexPS = 0;
 static const char *labelsPS[] = {"OFF", "200ms", "500ms", "1s", "2s", "5s"};
 static const uint16_t PS_Steps[] = {0, 20, 50, 100, 200, 500}; //in 10 ms
 #define PS_STEP_COUNT 5
+static const uint8_t rxHoldSteps[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 30}; // in s
+_Static_assert(ARRAY_SIZE(listenSteps) == SCAN_MAXRX_COUNT && ARRAY_SIZE(rxHoldSteps) == SCAN_RXHOLD_COUNT &&
+                   ARRAY_SIZE(PS_Steps) == SCAN_PS_COUNT && ARRAY_SIZE(osdPopupTimes) == SCAN_POPTIM_COUNT,
+               "General scan menu sizes");
+// Value text of the general menu's NoiLvOf, MaxRX, RxHold, ScanPS and PopTim.
+void APP_ScanMenuText(char *s, uint8_t menuId, uint8_t v)
+{
+    unsigned n = v;
+    const char *unit = "s";
+    switch (menuId) {
+        case MENU_MAXRX:
+            strcpy(s, labels[v]);
+            return;
+        case MENU_SCANPS:
+            strcpy(s, labelsPS[v]);
+            return;
+        case MENU_RXHOLD:
+            n = rxHoldSteps[v];
+            break;
+        case MENU_POPTIM:
+            n = osdPopupTimes[v];
+            unit = "ms";
+            if (n >= 1000)
+                n /= 1000, unit = "s";
+            break;
+        default: // NoiLvOf
+            unit = "";
+            break;
+    }
+    if (n)
+        sprintf(s, "%u%s", n, unit);
+    else
+        strcpy(s, "OFF");
+}
 static uint32_t lastReceivingFreq = 0;
 static bool gIsPeak = false;
 static bool historyListActive = false;
@@ -301,6 +358,8 @@ static uint16_t toVfoCss;
 static uint16_t msgIndex, msgScroll, msgCount;
 static int8_t msgStep = 1; // direction of the last move: session markers are skipped that way
 static bool msgOpen;     // the selected message is shown whole
+static bool historyPocsag; // the MESSAGES page shows the POCSAG journal (* again: the history)
+static uint8_t plTop;      // POCSAG page: first text line of the open page
 static uint8_t msgAsk;   // popup: MSG_ASK_DELETE (DELETE?) or MSG_ASK_CLEAR (CLEAR ALL?)
 enum { MSG_ASK_NONE, MSG_ASK_DELETE, MSG_ASK_CLEAR };
 #endif
@@ -469,7 +528,8 @@ _Static_assert(sizeof(RamHistory) == 10 && __builtin_offsetof(RamHistory, record
                "Packed RAM history and legacy prefix");
 #define HISTORY_COUNTS_ADDR  (ADRESS_HISTORY + (HISTORY_SIZE + 1u) * sizeof(HistoryStruct))
 #define HISTORY_COUNTS_MAGIC 0x324E4352u
-_Static_assert(HISTORY_COUNTS_ADDR + 4 + HISTORY_SIZE * 2 < 0x10000, "History before calibration");
+_Static_assert(HISTORY_COUNTS_ADDR + 4 + HISTORY_SIZE * 2 <= ADRESS_FKEYS, "History before the FKeys sector");
+_Static_assert(ADRESS_FKEYS % 0x1000 == 0 && ADRESS_FKEYS + FKEYS_SIZE <= 0x10000, "FKeys sector in the bank");
 static RamHistory history[HISTORY_SIZE];
 #define SetHistoryFreq(idx, freq) (history[(idx)].HFreqs = (freq))
 #define GetHistoryFreq(idx)       (history[(idx)].HFreqs)
@@ -617,7 +677,7 @@ typedef struct {
     uint8_t unused;     // 0x0F
 } __attribute__((packed)) FlashChannel_t;
 
-static uint16_t FindMemoryChannel(uint32_t freq, uint16_t last, uint8_t tolerance)
+static uint16_t FindMemoryChannel(uint32_t freq, uint16_t last, uint32_t tolerance)
 {
     static FlashChannel_t block[BLOCK_SIZE];
     for (uint32_t start_ch = MR_CHANNEL_FIRST; start_ch <= last; start_ch += BLOCK_SIZE) {
@@ -647,6 +707,24 @@ uint16_t BOARD_gMR_fetchChannel(const uint32_t freq)
 uint16_t APP_MemoryOnFrequency(uint32_t freq)
 {
     return FindMemoryChannel(freq, MAX_SCAN_CHANNELS - 1, 2);
+}
+
+// SKIP MEM, checked only on a detection: Spectre/Sentinel band and range
+// scans pass over memory frequencies; Monitor CH channels stay watched.
+static bool SkipMemory(uint32_t f)
+{
+    static uint32_t lastF, lastWrites;
+    static uint8_t lastHys = UINT8_MAX;
+    static bool lastHit;
+    if (!skipMem || vfoScan || MonitorIndex || Spectrum_state == CHANNEL_MODE)
+        return false;
+    if (f != lastF || lastWrites != gFlashWrites || lastHys != skipMemHys) {
+        lastF = f;
+        lastWrites = gFlashWrites;
+        lastHys = skipMemHys;
+        lastHit = FindMemoryChannel(f, MAX_SCAN_CHANNELS - 1, skipMemHysValues[skipMemHys] + 2) != 0xFFFF;
+    }
+    return lastHit;
 }
 
 // Display-only fallback for the 10 Hz rounding of aviation thirds.
@@ -1645,6 +1723,16 @@ static uint16_t CountValidHistoryItems()
 
 // ------------------ CSS detection ------------------
 
+static bool cssLineDue;
+// Received CTCSS/DCS on the Spectre RX screen, in place of the channel/list.
+static void DrawSpectrumCss(void)
+{
+    for (unsigned x = 80; x < 128; ++x)
+        gFrameBuffer[1][x] &= 3u;
+    const char *css = StringCode + (StringCode[0] == 'D');
+    UI_DrawCompactText5x5(css, 122 - UI_CompactTextWidth(css), 10);
+}
+
 static void UpdateCssDetection(void)
 {
     if (settings.modulationType != MODULATION_FM) {
@@ -1664,8 +1752,12 @@ static void UpdateCssDetection(void)
         return;
     const uint8_t detected = option + (type == CODE_TYPE_CONTINUOUS_TONE ? 0 : 100);
     if (CodeFreq != peak.f || code != detected || !StringCode[0] ||
-        (type != CODE_TYPE_CONTINUOUS_TONE && (StringCode[4] == 'R') != (type == CODE_TYPE_REVERSE_DIGITAL)))
-        rxDisplayPending = true;
+        (type != CODE_TYPE_CONTINUOUS_TONE && (StringCode[4] == 'R') != (type == CODE_TYPE_REVERSE_DIGITAL))) {
+        if (sentinelView)
+            rxDisplayPending = true;
+        else
+            cssLineDue = true; // Spectre: one LCD line, no full frame over the audio
+    }
     CodeFreq = peak.f;
     DCS_FormatCode(StringCode, type, option, type != CODE_TYPE_CONTINUOUS_TONE);
     code = detected;
@@ -1760,6 +1852,7 @@ static void ApplyRXProfile(bool listening)
 
 // A reception in this Spectre/Sentinel session: the zoom has a centre.
 static bool zoomRx;
+static uint32_t zoomVfoFreq; // SPECTRE VFO: zoom centre until the first RX
 static void FillfreqHistory(void)
 {
     zoomRx = true;
@@ -1793,6 +1886,7 @@ static void ToggleRX(bool on)
         rxDisplayPending = true;
         sentinelMeterDue = false;
         spectrumRxDbmFresh = true;
+        spectrumRxDbmSettle = 2;
 #ifdef ENABLE_FEAT_F4HWN_RX_TX_TIMER
         // Match APP_StartListening: reset once at the start of each VFO RX,
         // rather than inheriting the last RX/idle countdown.
@@ -2083,7 +2177,7 @@ static __attribute__((noinline)) void Measure(void)
     const bool absolute = AbsoluteSQL();
     const unsigned trigger = ScanTrigger();
     if (!absolute && trigger == 50) {
-        if (rssi > reference + UOO_trigger) {
+        if (rssi > reference + UOO_trigger && !SkipMemory(scanInfo.f)) {
             peak.f = scanInfo.f;
             peak.i = scanInfo.i;
             gIsPeak = false;
@@ -2093,7 +2187,8 @@ static __attribute__((noinline)) void Measure(void)
     } else if (!gIsPeak && rssi > reference + trigger) {
         SYSTEM_DelayMs(10);
         const uint16_t confirmed = scanInfo.rssi = GetRssi();
-        if (confirmed > reference + trigger && (!absolute || AboveScanSQL(confirmed, scanInfo.f))) {
+        if (confirmed > reference + trigger && (!absolute || AboveScanSQL(confirmed, scanInfo.f)) &&
+            !SkipMemory(scanInfo.f)) {
             peak.f = scanInfo.f;
             peak.i = scanInfo.i - 1;
             gIsPeak = true;
@@ -2212,7 +2307,8 @@ static bool IsBlacklisted(uint32_t f)
     return false;
 }
 
-static void Blacklist()
+static void Blacklist(void);
+static NATIVE_CODE(rf) void BlacklistNative(void)
 {
     if (lastReceivingFreq == 0)
         return;
@@ -2438,7 +2534,9 @@ static void DrawSelectionFooter(uint8_t selectedCount, uint8_t total, bool bands
     GUI_DisplaySmallest(lists, 2, Bottom_print, false, true);
     if (!bands)
         GUI_DisplaySmallest(channels, channelX, Bottom_print, false, true);
-    GUI_DisplaySmallest(speed, bands ? (128 - speedWidth) / 2 : speedX, Bottom_print, false, true);
+    if (bands && skipMem) // "312 SM", centred
+        strcat(speed, " SM");
+    GUI_DisplaySmallest(speed, bands ? (128 - (strlen(speed) * 4 - 1)) / 2 : speedX, Bottom_print, false, true);
     GUI_DisplaySmallest(frequency, 128, Bottom_print, false, true);
 }
 
@@ -2464,6 +2562,8 @@ static void DrawNums()
         else
             text[0] = 0;
 #endif
+        if (skipMem)
+            strcat(text, " SM");
         GUI_DisplaySmallest(text, (128 - (strlen(text) * 4 - 1)) / 2, Bottom_print, false, true);
     }
 }
@@ -2630,6 +2730,8 @@ static void DrawSentinel(char *frequency, const char *name)
     char text[18];
     snprintf(text, sizeof text, "%02u", receptions);
     UI_DrawText5x5(text, 2, 1, 3);
+    if (skipMem) // centred under the reception counter
+        UI_DrawText5x5("SM", 2, 8, 3); // the font of the modulation
     const char *modulation = gModulationStr[(uint8_t)SpectrumStatusParameters()];
     if (!last_ptt_state && StringCode[0]) {
         modulation = StringCode + (StringCode[0] == 'D');
@@ -2717,11 +2819,13 @@ static NATIVE_CODE(scan) void DrawFNative(uint32_t f)
     }
 
     SpectrumHeader(freqStr, line2, gFrameBuffer);
-    if (IS_MR_CHANNEL(lastNamedChannel)) {
+    if (!last_ptt_state && StringCode[0])
+        DrawSpectrumCss();
+    else if (IS_MR_CHANNEL(lastNamedChannel)) {
         const ChannelAttributes_t *att = MR_GetChannelAttributes(lastNamedChannel);
         SpectrumMemoryIdentity(lastNamedChannel, att ? att->scanlist : 0, gFrameBuffer);
     }
-    // Common dBm/S row for List, Band and Range; decoded codes stay in Sentinel.
+    // Common dBm/S row for List, Band and Range.
     DrawSpectrumDbm(f);
 }
 static void DrawF(uint32_t f)
@@ -2881,7 +2985,7 @@ static void ZoomOff(void)
     ZoomSwap();
     zoomLevel = 0;
 }
-static void ZoomNext(void)
+static NATIVE_CODE(plot) void ZoomNext(void)
 {
     static const uint8_t halfKHz[5] = {160, 80, 40, 20, 10}; // x5 kHz: 800 .. 50
     static const uint8_t steps[5] = {STEP_25kHz, STEP_12_5kHz, STEP_6_25kHz, STEP_2_5kHz, STEP_1kHz};
@@ -2890,8 +2994,8 @@ static void ZoomNext(void)
     else if (!zoomLevel) {
         // Only around a reception of this session (a remembered or locked
         // frequency from before is not a signal).
-        const uint32_t center = isListening && gIsPeak ? peak.f : lastReceivingFreq;
-        if (!zoomRx || center < FMIN || center > FMAX) {
+        const uint32_t center = isListening && gIsPeak ? peak.f : zoomRx ? lastReceivingFreq : zoomVfoFreq;
+        if (center < FMIN || center > FMAX) {
             ShowOSDPopup("NO SIGNAL YET");
             return;
         }
@@ -2920,7 +3024,7 @@ static void ZoomNext(void)
     SpectrumRestart();
 }
 
-void NextAppMode(void)
+static NATIVE_CODE(plot) void NextAppMode(void)
 {
 
     switch (Spectrum_state) {
@@ -3007,7 +3111,7 @@ static void SelectionMove(uint8_t *selected, int *scroll, uint8_t count, bool do
 /* --- BAND_LIST_SELECT: navigate and toggle band enable flags --- */
 static void StartScanSelection(void);
 static void SelectionMenuShort(void);
-static __attribute__((noinline)) void HandleKeyBandList(uint8_t key)
+static NATIVE_CODE(lists) void HandleKeyBandList(uint8_t key)
 {
     if (bandPickSession) { // one band: M scans it from the VFO, EXIT goes back
         if (key == KEY_UP || key == KEY_DOWN)
@@ -3035,14 +3139,7 @@ static __attribute__((noinline)) void HandleKeyBandList(uint8_t key)
                 const uint8_t bandIndex = GetBandIndexForRow(bandListSelectedIndex);
                 settings.bandEnabled[bandIndex] = !settings.bandEnabled[bandIndex];
                 nextBandToScanIndex = bandIndex;
-                const bool enabled = settings.bandEnabled[bandIndex];
-                bandListSelectedIndex = enabled ? 0 : CountActiveBands();
-                for (uint8_t i = 0; i < bandIndex; ++i)
-                    bandListSelectedIndex += settings.bandEnabled[i] == enabled;
-                if (bandListSelectedIndex < bandListScrollOffset)
-                    bandListScrollOffset = bandListSelectedIndex;
-                if (bandListSelectedIndex >= bandListScrollOffset + MAX_VISIBLE_LINES)
-                    bandListScrollOffset = bandListSelectedIndex - MAX_VISIBLE_LINES + 1;
+                // The cursor keeps its row: the band moves, the next one comes under it.
             }
             break;
         case KEY_MENU:
@@ -3099,8 +3196,17 @@ static void MoveVisibleScanList(bool forward, bool activate)
 }
 // Resolve navigation from the active scan, never from an inventory-page cursor.
 // The list/band inventory has its own row order and may reset that cursor.
+// A new list or band takes back its own modulation (channels, band).
+static void ClearModulationOverride(void)
+{
+    if (Spectrum_state != SCAN_RANGE_MODE) {
+        scanMenuModulation = UINT8_MAX;
+        gForceModulation = false;
+    }
+}
 static void CycleScanSelection(bool forward)
 {
+    ClearModulationOverride();
     if (Spectrum_state == CHANNEL_MODE) {
         unsigned first = MR_CHANNELS_LIST, count = 0;
         for (unsigned i = 0; i < MR_CHANNELS_LIST; ++i)
@@ -3151,6 +3257,7 @@ static void StartScanSelection(void)
     SPECTRUM_PAUSED = false;
     SpectrumPauseCount = 0;
     WaitSpectrum = 0;
+    ClearModulationOverride();
     ResetModifiers(true);
     SetState(SPECTRUM);
     SaveSettings(false);
@@ -3167,8 +3274,16 @@ static void HandleKeyScanList(uint8_t key)
             break;
         case KEY_4:
             scanOptionsChanged = true;
-            if (ScanListVisible(scanListSelectedIndex))
+            if (ScanListVisible(scanListSelectedIndex)) {
+                // The cursor keeps its row: the list moves, the next one comes under it.
+                uint8_t row = 0;
+                while (row < MR_CHANNELS_LIST && ScanListRowSlot(row) != scanListSelectedIndex)
+                    ++row;
                 ToggleScanList(scanListSelectedIndex, 0);
+                const uint8_t slot = ScanListRowSlot(row);
+                if (slot != UINT8_MAX)
+                    scanListSelectedIndex = slot;
+            }
             break;
         case KEY_MENU:
             SelectionMenuShort();
@@ -3333,11 +3448,6 @@ static NATIVE_CODE(options) void ChangeParameter(uint8_t key)
                                  : (Noislvl_OFF <= 0 ? 80 : Noislvl_OFF - 1);
             Noislvl_ON = Noislvl_OFF > NoiseHysteresis ? Noislvl_OFF - NoiseHysteresis : 1;
             break;
-        case PARAM_OSD_POPUP:
-            osdPopupIndex = isKey3 ? (osdPopupIndex >= 5 ? 0 : osdPopupIndex + 1)
-                                   : (osdPopupIndex <= 0 ? 5 : osdPopupIndex - 1);
-            osdPopupSetting = osdPopupTimes[osdPopupIndex];
-            break;
         case PARAM_RECORD_TRIGGER:
             UOO_trigger = isKey3 ? (UOO_trigger >= 50 ? 0 : UOO_trigger + 1)
                                  : (UOO_trigger <= 0 ? 50 : UOO_trigger - 1);
@@ -3359,13 +3469,12 @@ static NATIVE_CODE(options) void ChangeParameter(uint8_t key)
         case PARAM_MONITOR_SCAN:
             gMonitorScan = !gMonitorScan;
             break;
-        case PARAM_AUDIO_AM:
-            gSetting_set_audio_am = isKey3 ? (gSetting_set_audio_am >= 2 ? 0 : gSetting_set_audio_am + 1)
-                                           : (gSetting_set_audio_am == 0 ? 2 : gSetting_set_audio_am - 1);
-            if (isListening)
-                RADIO_SetModulation(settings.modulationType);
-            else
-                ApplyRXProfile(false);
+        case PARAM_SKIP_MEM:
+            skipMem = !skipMem;
+            break;
+        case PARAM_SKIP_MEM_HYS:
+            skipMemHys = isKey3 ? (skipMemHys + 1 < ARRAY_SIZE(skipMemHysValues) ? skipMemHys + 1 : 0)
+                                : (skipMemHys ? skipMemHys - 1 : ARRAY_SIZE(skipMemHysValues) - 1);
             break;
     }
     GetParametersRow(parametersSelectedIndex, &after);
@@ -3451,6 +3560,7 @@ static void HistoryClose(void)
     historyListActive = false;
     historyMessages = false;
 #ifdef ENABLE_FALCON_MESSAGES
+    historyPocsag = false;
     msgOpen = false;
     msgAsk = MSG_ASK_NONE;
 #endif
@@ -3498,39 +3608,150 @@ static __attribute__((noinline)) void ListenHistoryEntry(void)
 // * switches between the history and MESSAGES pages. The MESSAGES page stops
 // the scan and the receiver: no audio, no RX or scan LED until the history
 // returns.
+// * goes on: history, MESSAGES, POCSAG (the same page state, another journal),
+// history again.
 static __attribute__((noinline)) void HistoryTogglePage(void)
 {
-    historyMessages = !historyMessages;
+    if (historyMessages && !historyPocsag)
+        historyPocsag = true;
+    else {
+        historyMessages = !historyMessages;
+        historyPocsag = false;
+    }
     if (historyMessages) {
         msgIndex = msgScroll = 0;
         msgStep = 1;
+        msgOpen = false;
         HistoryQuiet();
     } else
         RenderStatus(); // the scan status line comes back
 }
 
-// The message of the selected row (never a marker: the page skips them).
-static __attribute__((noinline)) bool MessageSelected(MSG_Row_t *row)
+// ---- POCSAG page: the journal POCSAG Scan writes (app/pocsaglog.h). It
+// shares the MESSAGES page's list, open entry, popups and keys; only its
+// rows and its open entry's header differ. ----
+#define PL_SHOWN_MAX 999u // pages listed, newest first (three digits in the title)
+
+// The text of a POCSAG page: characters first..first+n-1 into out; returns
+// how many there were.
+static NATIVE_CODE(messages) uint8_t PlText(uint32_t address, const PLOG_Page_t *p, uint16_t first, uint8_t n,
+                                            char *out)
 {
-    return msgIndex < msgCount && MSG_Fetch(msgIndex, row, 1, 0xFFFF, NULL, NULL) > msgIndex &&
-           !row->marker;
+    if (first >= p->chars)
+        return 0;
+    if (n > p->chars - first)
+        n = (uint8_t)(p->chars - first);
+    PY25Q16_ReadPhysical(address + 8u + sizeof *p + first, out, n);
+    for (uint8_t i = 0; i < n; ++i)
+        if (out[i] < ' ')
+            out[i] = ' ';
+        else if (out[i] == 0x7F) // a character POCSAG Scan could not read
+            out[i] = '?';
+    return n;
+}
+
+// Its memory channel's name, 8 characters at most ("VFO" without one).
+static NATIVE_CODE(messages) void PlName(const PLOG_Page_t *p, char *out)
+{
+    char name[17];
+    if (p->channel == 0xFFFFu)
+        strcpy(name, "VFO");
+    else
+        SETTINGS_FetchChannelName(name, p->channel);
+    name[8] = 0;
+    strcpy(out, name);
+}
+
+// Its age: "05m", "2h14", "3d"; "--" for a page of an earlier power-on (the
+// clock starts again at each one). 4 characters at most.
+static NATIVE_CODE(messages) void PlAge(uint32_t address, const PLOG_Page_t *p, char *out)
+{
+    const uint32_t m = (gGlobalSysTickCounter * 10u - p->t) / 60000u;
+    if (!PLOG_SameBoot(address))
+        strcpy(out, "--");
+    else if (m < 60u)
+        snprintf(out, 5, "%02um", (unsigned)m);
+    else if (m < 24u * 60u)
+        snprintf(out, 5, "%uh%02u", (unsigned)(m / 60u), (unsigned)(m % 60u));
+    else
+        snprintf(out, 5, "%ud", (unsigned)(m / 1440u));
+}
+
+// Rows from row first, newest first, as MSG_Fetch: deleted and incomplete
+// records skipped, a session marker only between two pages.
+static NATIVE_CODE(messages) uint16_t PlFetch(uint16_t first, MSG_Row_t *rows, uint8_t count, uint16_t selected,
+                                              uint16_t *ordinal, uint16_t *pages)
+{
+    uint16_t row = 0, shown = 0;
+    bool marker = false;
+    for (uint32_t a = PLOG_Prev(0); a && shown < PL_SHOWN_MAX; a = PLOG_Prev(a)) {
+        const int r = PLOG_Read(a, NULL, 0);
+        if (r == PLOG_SESSION) {
+            marker = shown != 0;
+            continue;
+        }
+        if (r < 0)
+            continue;
+        for (uint8_t k = marker ? 2 : 1; k--;) {
+            const bool isMarker = k == 1;
+            if (row >= first && row - first < count) {
+                MSG_Row_t *m = &rows[row - first];
+                m->marker = isMarker;
+                m->id = a;
+                if (!isMarker) { // "POCSAG43 05m START OF THE" (the name in 8 columns)
+                    PLOG_Page_t p;
+                    char name[9], age[5];
+                    PLOG_Read(a, &p, sizeof p);
+                    PlName(&p, name);
+                    PlAge(a, &p, age);
+                    char *t = m->line + snprintf(m->line, 15, "%-8s %s ", name, age);
+                    t[PlText(a, &p, 0, (uint8_t)(m->line + 21 - t), t)] = 0;
+                }
+            }
+            if (!isMarker && row == selected && ordinal)
+                *ordinal = shown + 1u;
+            ++row;
+        }
+        marker = false;
+        ++shown;
+    }
+    if (pages)
+        *pages = shown;
+    return row;
+}
+
+static NATIVE_CODE(messages) uint16_t JournalFetch(uint16_t first, MSG_Row_t *rows, uint8_t count,
+                                                   uint16_t selected, uint16_t *ordinal, uint16_t *total)
+{
+    return (historyPocsag ? PlFetch : MSG_Fetch)(first, rows, count, selected, ordinal, total);
+}
+
+// The entry of the selected row (never a marker: the page skips them).
+static NATIVE_CODE(messages) bool RowSelected(MSG_Row_t *row)
+{
+    return msgIndex < msgCount && JournalFetch(msgIndex, row, 1, 0xFFFF, NULL, NULL) > msgIndex && !row->marker;
 }
 
 // List: arrows select, M opens, 6 asks DELETE?, 6 long asks CLEAR ALL?. An
-// open message: 6 asks DELETE?, EXIT returns. A popup: M confirms (then the
-// history's Deleted bubble), EXIT cancels.
-static __attribute__((noinline)) void HandleKeyMessages(uint8_t key)
+// open entry: arrows scroll its text, 6 asks DELETE?, EXIT returns. A popup:
+// M confirms (then the history's Deleted bubble), EXIT cancels.
+static NATIVE_CODE(messages) void HandleKeyJournalNative(uint8_t key)
 {
-    if (!APP_NativeBegin(NATIVE_MESSAGES))
-        return;
     MSG_Row_t row;
     if (msgAsk) {
         if (key == KEY_MENU) {
             if (msgAsk == MSG_ASK_CLEAR) {
-                MSG_Clear();
+                if (historyPocsag)
+                    PLOG_Clear();
+                else
+                    MSG_Clear();
                 msgIndex = msgScroll = 0;
-            } else if (MessageSelected(&row))
-                MSG_Delete(row.slot);
+            } else if (RowSelected(&row)) {
+                if (historyPocsag)
+                    PLOG_Delete(row.id);
+                else
+                    MSG_Delete((uint8_t)row.id);
+            }
             msgOpen = false;
             ShowOSDPopup("Deleted");
         }
@@ -3539,17 +3760,30 @@ static __attribute__((noinline)) void HandleKeyMessages(uint8_t key)
     } else if (key == KEY_EXIT) {
         msgOpen = false;
     } else if (key == KEY_6) {
-        if (MessageSelected(&row))
+        if (RowSelected(&row))
             msgAsk = MSG_ASK_DELETE;
-    } else if (!msgOpen && key == KEY_MENU) {
-        msgOpen = MessageSelected(&row);
-    } else if (!msgOpen && msgCount && (key == KEY_UP || key == KEY_DOWN)) {
+    } else if (msgOpen) {
+        if (key == KEY_UP && plTop)
+            plTop--;
+        else if (key == KEY_DOWN)
+            plTop++; // held at the last lines when drawn
+    } else if (key == KEY_MENU) {
+        msgOpen = RowSelected(&row);
+        plTop = 0;
+    } else if (msgCount && (key == KEY_UP || key == KEY_DOWN)) {
         msgStep = key == KEY_DOWN ? 1 : -1;
         if (key == KEY_DOWN)
             msgIndex = msgIndex + 1u >= msgCount ? 0 : msgIndex + 1u;
         else
             msgIndex = msgIndex ? msgIndex - 1u : msgCount - 1u;
     }
+}
+
+static __attribute__((noinline)) void HandleKeyMessages(uint8_t key)
+{
+    if (!APP_NativeBegin(NATIVE_MESSAGES))
+        return;
+    HandleKeyJournalNative(key);
     APP_NativeEnd();
 }
 #endif
@@ -3628,19 +3862,19 @@ static __attribute__((noinline)) void HandleKeySpectrum(uint8_t key)
                     ShowOSDPopup("SKIPPED");
             }
             break;
-        case KEY_7:
-            if (!historyListActive) {
-                if (zoomLevel)
-                    ZoomSwap(); // save the scan, not the zoom
-                SaveSettings(true);
-                if (zoomLevel)
-                    ZoomSwap();
+        case KEY_7: // SKIP MEM, band and range only (settings are saved at entry, mode change and exit)
+            if (!historyListActive && Spectrum_state != CHANNEL_MODE) {
+                skipMem = !skipMem;
+                ShowOSDPopup(skipMem ? "SKIP MEM ON" : "SKIP MEM OFF");
             }
             break;
         case KEY_4:
             // No zoom from the list scan: its plot follows the memories.
             if (!historyListActive && !sentinelView && Spectrum_state != CHANNEL_MODE)
-                ZoomNext();
+                if (APP_NativeBegin(NATIVE_PLOT)) {
+                    ZoomNext();
+                    APP_NativeEnd();
+                }
             break;
         case KEY_8:
             if (!historyListActive && !sentinelView) {
@@ -3673,7 +3907,13 @@ static __attribute__((noinline)) void HandleKeySpectrum(uint8_t key)
                 else if (historyListIndex >= historyScrollOffset + MAX_VISIBLE_LINES)
                     historyScrollOffset = historyListIndex - MAX_VISIBLE_LINES + 1;
                 ListenHistoryEntry();
-            } else if (Spectrum_state == SCAN_RANGE_MODE)
+                break;
+            }
+            if (!SpectrumMonitor) { // a new list/band/range ends the RX and its delay
+                WaitSpectrum = 0;
+                ToggleRX(false);
+            }
+            if (Spectrum_state == SCAN_RANGE_MODE)
                 MoveScanRange(forward);
             else
                 CycleScanSelection(forward);
@@ -3689,7 +3929,10 @@ static __attribute__((noinline)) void HandleKeySpectrum(uint8_t key)
                 DeleteHistoryItem();
             } else {
                 ZoomOff();
-                NextAppMode();
+                if (APP_NativeBegin(NATIVE_PLOT)) {
+                    NextAppMode();
+                    APP_NativeEnd();
+                }
             }
             break;
         case KEY_SIDE1:
@@ -3972,7 +4215,10 @@ static void OnKeyDown(uint8_t key)
     /* Dispatch to the handler for the currently active state */
     switch (currentState) {
         case BAND_LIST_SELECT:
-            HandleKeyBandList(key);
+            if (APP_NativeBegin(NATIVE_LISTS)) {
+                HandleKeyBandList(key);
+                APP_NativeEnd();
+            }
             break;
         case SCANLIST_SELECT:
             HandleKeyScanList(key);
@@ -4108,6 +4354,13 @@ static char vfoPopup[16];
 static uint32_t vfoPopupEnd;
 static uint16_t vfoPopupMs;
 static uint16_t SpectrePopupMs(void);
+static void Blacklist(void)
+{
+    if (APP_NativeBegin(NATIVE_RF)) {
+        BlacklistNative();
+        APP_NativeEnd();
+    }
+}
 static void VfoScanPopup(const char *text)
 {
     if (!vfoPopupMs)
@@ -4408,6 +4661,13 @@ static void Render()
             if (DrawSpectrumDbm(peak.f)) {
                 ST7565_BlitLine(1);
                 ST7565_BlitLine(2);
+            }
+            if (cssLineDue) {
+                cssLineDue = false;
+                if (StringCode[0]) {
+                    DrawSpectrumCss();
+                    ST7565_BlitLine(1);
+                }
             }
             if (waterfallOn && waterfallRow && APP_NativeBegin(NATIVE_PLOT)) {
                 waterfallRow = false;
@@ -4892,6 +5152,9 @@ static __attribute__((noinline)) void UpdateListening(void)
 
     const bool wasListening = isListening;
     scanInfo.rssi = GetRssi();
+    // The scan's dBm is read on the carrier's rise: read it again once the AGC settled.
+    if (isListening && spectrumRxDbmSettle && !--spectrumRxDbmSettle)
+        spectrumRxDbmFresh = true;
 
     if (SoundBoost != SoundBoostsave) {
         if (SoundBoost) {
@@ -4931,8 +5194,9 @@ static __attribute__((noinline)) void UpdateListening(void)
             UpdateNoiseOn();
     }
     if (wasListening && !isListening) {
+        // The VFO scans hold for RxHold (general menu), set as SpectrumDelay.
         WaitSpectrum =
-            (!vfoScan && !vfoRangeSession && !historyListActive && !SpectrumMonitor) ? SpectrumDelay : 0;
+            (vfoScan || (!vfoRangeSession && !historyListActive && !SpectrumMonitor)) ? SpectrumDelay : 0;
         if (WaitSpectrum)
             return;
     }
@@ -5177,6 +5441,28 @@ void APP_RunScanner(Mode mode, bool sentinel)
     if (mode <= SCAN_BAND_MODE)
         Spectrum_state = mode;
     APP_RunSpectrum();
+}
+
+// SPECTRE VFO shortcut: Spectre range +-800 kHz around the VFO, 25 kHz steps.
+// The saved range is put back afterwards.
+void APP_RunSpectreVfo(void)
+{
+    SelectScanProfile(false);
+    const uint32_t start = RangeStart, stop = RangeStop, f = gTxVfo->pRX->Frequency;
+    const STEP_Setting_t step = settings.scanStepIndex;
+    const Mode mode = Spectrum_state;
+    RangeStart = f - 80000;
+    RangeStop = f + 80000;
+    settings.scanStepIndex = STEP_25kHz;
+    Spectrum_state = SCAN_RANGE_MODE;
+    zoomVfoFreq = f;
+    APP_RunSpectrum();
+    zoomVfoFreq = 0;
+    RangeStart = start;
+    RangeStop = stop;
+    settings.scanStepIndex = step;
+    Spectrum_state = mode;
+    SaveSettings(false);
 }
 
 void APP_RunSentinel(void)
@@ -5520,6 +5806,14 @@ void APP_RunCurrentScanList(uint8_t list)
     const bool savedSentinel = sentinelView;
     sentinelView = false;
     const uint16_t savedDelay = DelayRssi;
+    // The VFO scans' own NoiLvOf, MaxRX, RxHold and ScanPS (general menu).
+    const uint16_t savedRxDelay = SpectrumDelay, savedMaxListen = MaxListenTime, savedSleep = SpectrumSleepMs;
+    const uint8_t savedNoiseOff = Noislvl_OFF, savedNoiseOn = Noislvl_ON;
+    Noislvl_OFF = gScanNoiLvOf;
+    Noislvl_ON = gScanNoiLvOf > NoiseHysteresis ? gScanNoiLvOf - NoiseHysteresis : 1;
+    MaxListenTime = listenSteps[gScanMaxRx];
+    SpectrumDelay = rxHoldSteps[gScanRxHold] * 1000u;
+    SpectrumSleepMs = PS_Steps[gScanPS];
     const Mode savedMode = Spectrum_state;
     const uint8_t savedPtt = PttEmission;
     const bool savedKey1 = Key_1_pressed;
@@ -5652,6 +5946,11 @@ void APP_RunCurrentScanList(uint8_t list)
     memcpy(settings.scanListEnabled, savedLists, sizeof(savedLists));
     FastSpeed = savedFast;
     DelayRssi = savedDelay;
+    SpectrumDelay = savedRxDelay;
+    MaxListenTime = savedMaxListen;
+    SpectrumSleepMs = savedSleep;
+    Noislvl_OFF = savedNoiseOff;
+    Noislvl_ON = savedNoiseOn;
     gMonitorScan = savedMonitor;
     sentinelView = savedSentinel;
     Spectrum_state = savedMode;
@@ -5687,6 +5986,23 @@ void APP_RunAllMemoryScan(void)
 // active VFO, in frequency mode, from its start with its step, modulation and
 // filter. EXIT gives the VFO back as it was, memory mode included; a stop on a
 // signal keeps the frequency and the band's settings.
+/* BAND SCAN: the band picked becomes the VFO scan's (rf module). */
+static NATIVE_CODE(rf) void BandScanSetup(void)
+{
+    const bandparameters *b = &BParams[bandPick];
+    vfoBand.start = b->Startfrequency < b->Stopfrequency ? b->Startfrequency : b->Stopfrequency;
+    vfoBand.stop = b->Startfrequency < b->Stopfrequency ? b->Stopfrequency : b->Startfrequency;
+    vfoBand.step = b->scanStep;
+    vfoBand.mod = b->modulationType;
+    vfoBand.bw = b->bandwidth;
+    unsigned n = 0;
+    while (n < 8 && (uint8_t)(b->BandName[n] - ' ') < 95)
+        vfoBand.name[n] = b->BandName[n], ++n;
+    while (n && vfoBand.name[n - 1] == ' ')
+        --n;
+    vfoBand.name[n] = 0;
+    vfoBand.lastRx = 0;
+}
 void APP_RunBandScan(void)
 {
     LoadActiveBands();
@@ -5705,19 +6021,10 @@ void APP_RunBandScan(void)
     scanEmpty = false; // worked out without the memories: not the next Spectre's
     if (bandPick >= bandCount)
         return;
-    const bandparameters *b = &BParams[bandPick];
-    vfoBand.start = b->Startfrequency < b->Stopfrequency ? b->Startfrequency : b->Stopfrequency;
-    vfoBand.stop = b->Startfrequency < b->Stopfrequency ? b->Stopfrequency : b->Startfrequency;
-    vfoBand.step = b->scanStep;
-    vfoBand.mod = b->modulationType;
-    vfoBand.bw = b->bandwidth;
-    unsigned n = 0;
-    while (n < 8 && (uint8_t)(b->BandName[n] - ' ') < 95)
-        vfoBand.name[n] = b->BandName[n], ++n;
-    while (n && vfoBand.name[n - 1] == ' ')
-        --n;
-    vfoBand.name[n] = 0;
-    vfoBand.lastRx = 0;
+    if (!APP_NativeBegin(NATIVE_RF))
+        return;
+    BandScanSetup();
+    APP_NativeEnd();
     const uint8_t vfo = gEeprom.TX_VFO & 1u;
     const uint16_t screen = gEeprom.ScreenChannel[vfo];
     if (IS_MR_CHANNEL(screen)) {
@@ -5813,7 +6120,9 @@ void SCANLISTS_InitUsage(void)
 
 
 typedef struct {
-    int ShowLines;
+    uint8_t ShowLines;
+    uint8_t skipMemCfg[2]; // SKIP MEM: [0] Spectre, [1] Sentinel (0xA0 | on << 3 | hys)
+    uint8_t showLinesPad;
     uint8_t PttEmission;
     uint8_t listenBw;
     uint64_t bandListFlags; // Bits 0-63: bandEnabled[0..63]
@@ -5914,9 +6223,8 @@ static void ApplyScanMenu(const SettingsEEPROM *d)
     UOO_trigger = p.record <= 50 ? p.record : 5;
     IndexPS = p.power < ARRAY_SIZE(PS_Steps) ? p.power : 0;
     SpectrumSleepMs = PS_Steps[IndexPS];
-    osdPopupIndex = p.popup < ARRAY_SIZE(osdPopupTimes) ? p.popup : 1;
-    osdPopupSetting = osdPopupTimes[osdPopupIndex];
-    gSetting_set_audio_am = p.amAudio < 3 ? p.amAudio : 0;
+    osdPopupIndex = gPopTim; // PopTim (general menu) for every scan
+    osdPopupSetting = osdPopupTimes[gPopTim];
     PttEmission = (p.flags & 1u) ? 2 : 0;
     Ptt2Emission = (p.flags & 2u) ? 2 : 0;
     gMonitorScan = (p.flags >> 2) & 1u;
@@ -5925,9 +6233,18 @@ static void ApplyScanMenu(const SettingsEEPROM *d)
     gKeylockCountdown = durations[AUTO_KEYLOCK];
     scanMenuModulation = p.modulation < MODULATION_UKNOWN ? p.modulation : UINT8_MAX;
     scanMenuBandwidth = p.bw & 3u;
+    const uint8_t skip = d->skipMemCfg[sentinelView];
+    const bool skipValid = (skip & 0xF0u) == 0xA0u && (skip & 7u) < ARRAY_SIZE(skipMemHysValues);
+    skipMem = skipValid && (skip & 8u);
+    skipMemHys = skipValid ? skip & 7u : 4;
 }
 static void StoreScanMenu(SettingsEEPROM *d)
 {
+    const uint8_t skip = 0xA0u | (skipMem << 3) | skipMemHys;
+    if (Cleared)
+        d->skipMemCfg[0] = d->skipMemCfg[1] = skip;
+    else
+        d->skipMemCfg[sentinelView] = skip;
     if (!sentinelView || Cleared) {
         d->PttEmission = PttEmission;
         d->SpectrumDelay = SpectrumDelay;
@@ -6025,13 +6342,13 @@ static void SelectScanProfile(bool sentinel)
 }
 
 
-// Spectre's popup duration, whatever profile is loaded (the VFO scans' messages).
+// PopTim (general menu), whatever profile is loaded (the VFO scans' messages).
 static uint16_t SpectrePopupMs(void)
 {
-    uint8_t index;
-    PY25Q16_ReadBuffer(ADRESS_PARAMS + offsetof(SettingsEEPROM, osdPopupIndex), &index, 1);
-    return osdPopupTimes[index < ARRAY_SIZE(osdPopupTimes) ? index : 1];
+    return osdPopupTimes[gPopTim];
 }
+_Static_assert(offsetof(SettingsEEPROM, osdPopupIndex) == 0x56, "APP_LoadScanSQL reads the old POPUPS byte");
+_Static_assert(sizeof(SettingsEEPROM) <= 0x80, "ADRESS_SCAN_MENU overlaps the scan settings");
 
 void LoadSettings()
 {
@@ -6041,7 +6358,6 @@ void LoadSettings()
     SettingsEEPROM eepromData = {0};
     PY25Q16_ReadBuffer(ADRESS_PARAMS, &eepromData, sizeof(eepromData));
     if (eepromData.IndexMaxLT >= ARRAY_SIZE(listenSteps) || eepromData.IndexPS >= ARRAY_SIZE(PS_Steps) ||
-        eepromData.osdPopupIndex >= ARRAY_SIZE(osdPopupTimes) ||
         (unsigned)eepromData.scanStepIndex >= ARRAY_SIZE(scanStepValues)) {
         ClearSettings();
         PY25Q16_ReadBuffer(ADRESS_PARAMS, &eepromData, sizeof(eepromData));
@@ -6206,15 +6522,12 @@ void ClearSettings()
     Noislvl_OFF = NoisLvl;
     Noislvl_ON = NoisLvl - NoiseHysteresis;
     UOO_trigger = 5;
-    osdPopupIndex = 1;
-    osdPopupSetting = osdPopupTimes[osdPopupIndex];
     Spectrum_state = SCAN_RANGE_MODE;
     SoundBoost = 0;
     gMonitorScan = false;
     TxChannel = 0;
     FastSpeed = 0;
     settings.bandEnabled[0] = 1;
-    gSetting_set_audio_am = 0;
     for (uint8_t i = 1; i < MAX_BANDS; i++) {
         settings.bandEnabled[i] = 0;
     }
@@ -6419,14 +6732,14 @@ static void GetParametersRow(uint16_t index, ListRow *row)
         [PARAM_MODULATION] = "MODULATION:",
         [PARAM_POWER_SAVE] = "POWER SAVE:",
         [PARAM_NOISE_LEVEL_OFF] = "NOIS LVL OFF:",
-        [PARAM_OSD_POPUP] = "POPUPS:",
         [PARAM_RECORD_TRIGGER] = "RECORD TRIG:",
         [PARAM_AUTO_KEYLOCK] = "KEYLOCK:",
         [PARAM_SOUND_BOOST] = "SOUNDBOOST:",
         [PARAM_PTT_EMISSION] = "PTT:",
         [PARAM_PTT2_EMISSION] = "PTT2:",
         [PARAM_MONITOR_SCAN] = "MONITOR CH:",
-        [PARAM_AUDIO_AM] = "AM AUDIO:",
+        [PARAM_SKIP_MEM] = "SKIP MEM:",
+        [PARAM_SKIP_MEM_HYS] = "SKIPMEM TOL:",
     };
     row->right[0] = 0;
     const char *right = NULL;
@@ -6459,18 +6772,6 @@ static void GetParametersRow(uint16_t index, ListRow *row)
         case PARAM_NOISE_LEVEL_OFF:
             snprintf(row->right, sizeof(row->right), "%d", Noislvl_OFF);
             break;
-        case PARAM_OSD_POPUP:
-            if (osdPopupSetting) {
-                uint8_t sec = osdPopupSetting / 1000;
-                uint8_t dec = (osdPopupSetting % 1000) / 100;
-                if (dec)
-                    snprintf(row->right, sizeof(row->right), "%d.%dS", sec, dec);
-                else
-                    snprintf(row->right, sizeof(row->right), "%dS", sec);
-            } else {
-                right = "OFF";
-            }
-            break;
         case PARAM_RECORD_TRIGGER:
             snprintf(row->right, sizeof(row->right), "%d", UOO_trigger);
             break;
@@ -6495,9 +6796,12 @@ static void GetParametersRow(uint16_t index, ListRow *row)
             else
                 right = "OFF";
             break;
-        case PARAM_AUDIO_AM: {
-            const char *amProfileNames[] = {"SHARP", "STOCK", "OPEN"};
-            right = amProfileNames[gSetting_set_audio_am % 3];
+        case PARAM_SKIP_MEM:
+            right = skipMem ? "ON" : "OFF";
+            break;
+        case PARAM_SKIP_MEM_HYS: {
+            static const char *const hys[] = {"0K", "1K", "2.5K", "5K", "6.25K", "12.5K", "25K"};
+            right = hys[skipMemHys];
             break;
         }
         default:
@@ -6659,7 +6963,7 @@ static NATIVE_CODE(lists) void RenderScanSelection(const char *title, const char
     CHANNEL_DrawKeysInfos();
     if (selectionHelp) {
         if (historyPage)
-            CHANNEL_DrawHistoryHelp(false);
+            CHANNEL_DrawHistoryHelp(0);
         else
             CHANNEL_DrawSelectionHelp(currentState == BAND_LIST_SELECT ? 1 + bandPickSession : 0);
     }
@@ -6752,40 +7056,7 @@ static NATIVE_CODE(lists) void RenderHistoryListNative(void)
 }
 
 #ifdef ENABLE_FALCON_MESSAGES
-// MESSAGES page: the title, rows, fonts and selection of the history pages.
-// "01-AB: START OF THE TEXT", newest first; a dotted line marks a new FMessage
-// session. M shows the selected message whole, 6 long asks CLEAR ALL?.
-static NATIVE_CODE(messages) void RenderMessageNative(void)
-{
-    MSG_Row_t row;
-    char cs[2], text[MSG_TEXT_MAX + 1], title[8];
-    if (!MessageSelected(&row)) {
-        msgOpen = false;
-        return;
-    }
-    const uint8_t len = MSG_ReadText(row.slot, cs, text);
-    memcpy(title, "FROM ", 5);
-    memcpy(title + 5, cs, 2);
-    title[7] = 0;
-    // FROM AB at the top left, in the status line as the page titles.
-    memset(gFrameBuffer, 0, sizeof gFrameBuffer);
-    UI_PrintStringSmallBold(title, 1, 0, 0);
-    memcpy(gStatusLine, gFrameBuffer[0], sizeof gStatusLine);
-    memset(gFrameBuffer[0], 0, sizeof gFrameBuffer[0]);
-    // Up to four lines of 18 characters, left aligned, from the second line
-    // as in FMessage.
-    const uint8_t lines = len ? (len + 17u) / 18u : 1u;
-    for (uint8_t line = 0; line < lines; ++line) {
-        char part[19];
-        memcpy(part, text + line * 18u, 18);
-        part[18] = 0;
-        UI_PrintStringSmallNormal(part, 1, 0, 1u + line);
-    }
-    GUI_DisplaySmallest("6:DEL", 1, 50, false, true);
-    GUI_DisplaySmallest("EXIT:BACK", 92, 50, false, true);
-}
-
-// DELETE? or CLEAR ALL? over the list or the message: the frame of the keys
+// DELETE? or CLEAR ALL? over the list or the entry: the frame of the keys
 // popups.
 static NATIVE_CODE(messages) void RenderAskNative(void)
 {
@@ -6795,10 +7066,76 @@ static NATIVE_CODE(messages) void RenderAskNative(void)
     UI_DrawText5x5("EXIT:NO", 69, 31, 7);
 }
 
-static NATIVE_CODE(messages) void RenderMessagesNative(void)
+// An open entry: its header at the top left, in the status line as the page
+// titles ("FROM AB"; POCSAG: "1234567 F3" then "SDIS32 173.51250 -89dBm
+// 05m"), then four lines of 18 characters from plTop, scrolled by the arrows.
+static NATIVE_CODE(messages) void RenderOpenNative(void)
+{
+    MSG_Row_t row;
+    PLOG_Page_t p;
+    char head[40], text[MSG_TEXT_MAX + 1], cs[2];
+    uint16_t chars;
+    if (!RowSelected(&row) || (historyPocsag && PLOG_Read(row.id, &p, sizeof p) < (int)sizeof p)) {
+        msgOpen = false;
+        return;
+    }
+    memset(gFrameBuffer, 0, sizeof gFrameBuffer);
+    if (historyPocsag) {
+        snprintf(head, sizeof head, "%u F%u", (unsigned)(p.ric & 0x1FFFFFu), p.func & 3u);
+        chars = p.chars;
+    } else {
+        chars = MSG_ReadText((uint8_t)row.id, cs, text);
+        snprintf(head, sizeof head, "FROM %c%c", cs[0], cs[1]);
+    }
+    UI_PrintStringSmallBold(head, 1, 0, 0);
+    memcpy(gStatusLine, gFrameBuffer[0], sizeof gStatusLine);
+    memset(gFrameBuffer[0], 0, sizeof gFrameBuffer[0]);
+    if (historyPocsag) {
+        // "[POCSAG43] 433.25000 -23dBm 05m": the name in a capsule, as in
+        // POCSAG Scan (a blank column each side), then the frequency
+        char name[9], age[5];
+        PlName(&p, name);
+        PlAge(row.id, &p, age);
+        const uint8_t w = (uint8_t)(4u * strlen(name) + 1u);
+        GUI_DisplaySmallest(name, 1, 1, false, true);
+        for (uint8_t x = 0; x < w; x++)
+            gFrameBuffer[0][x] ^= 0x7Fu;
+        snprintf(head, sizeof head, "%u.%05u %ddBm %s", (unsigned)(p.freq / 100000u),
+                 (unsigned)(p.freq % 100000u), (int)p.rssi, age);
+        GUI_DisplaySmallest(head, w + 3u, 1, false, true);
+    }
+    const uint16_t lines = chars ? (chars + 17u) / 18u : 1u;
+    if (plTop + 4u > lines)
+        plTop = lines > 4u ? (uint8_t)(lines - 4u) : 0;
+    for (uint8_t line = 0; line < 4u; ++line) {
+        char part[19];
+        const uint16_t from = (plTop + line) * 18u;
+        uint8_t n = 0;
+        if (historyPocsag)
+            n = PlText(row.id, &p, from, 18, part);
+        else if (from < chars) {
+            n = chars - from < 18u ? (uint8_t)(chars - from) : 18u;
+            memcpy(part, text + from, n);
+        }
+        part[n] = 0;
+        UI_PrintStringSmallNormal(part, 1, 0, 1u + line);
+    }
+    GUI_DisplaySmallest("6:DEL", 1, 50, false, true);
+    if (lines > 4u) {
+        snprintf(head, sizeof head, "%u/%u", plTop + 1u, lines);
+        GUI_DisplaySmallest(head, 52, 50, false, true);
+    }
+    GUI_DisplaySmallest("EXIT:BACK", 92, 50, false, true);
+}
+
+// MESSAGES and POCSAG pages: the title, rows, fonts and selection of the
+// history pages, newest first; a dotted line marks a new app session. M shows
+// the selected entry whole, 6 long asks CLEAR ALL?. The selected row's text
+// has a blank pixel row above and below in its highlight.
+static NATIVE_CODE(messages) void RenderJournalNative(void)
 {
     if (msgOpen) {
-        RenderMessageNative();
+        RenderOpenNative();
         if (msgOpen) {
             if (msgAsk)
                 RenderAskNative();
@@ -6807,17 +7144,17 @@ static NATIVE_CODE(messages) void RenderMessagesNative(void)
     }
     const uint8_t top = HistoryListTop(), lines = HistoryListLines();
     MSG_Row_t rows[MAX_VISIBLE_LINES + 1];
-    uint16_t ordinal = 0, messages = 0;
-    char text[24];
-    msgCount = MSG_Fetch(0, NULL, 0, 0xFFFF, NULL, NULL);
+    uint16_t ordinal = 0, total = 0;
+    char text[12];
+    msgCount = JournalFetch(0, NULL, 0, 0xFFFF, NULL, NULL);
     if (msgIndex >= msgCount) {
         msgIndex = msgCount ? msgCount - 1u : 0;
         msgStep = -1;
     }
     // The selection never rests on a marker: it moves on in the direction of
-    // the last move. A marker always lies between two messages.
+    // the last move. A marker always lies between two entries.
     for (uint8_t tries = 0; msgCount && tries < 2; ++tries) {
-        MSG_Fetch(msgIndex, rows, 1, 0xFFFF, NULL, NULL);
+        JournalFetch(msgIndex, rows, 1, 0xFFFF, NULL, NULL);
         if (!rows[0].marker)
             break;
         msgIndex = msgStep > 0 ? msgIndex + 1u : msgIndex - 1u;
@@ -6828,27 +7165,18 @@ static NATIVE_CODE(messages) void RenderMessagesNative(void)
         msgScroll = msgIndex - lines + 1u;
     if (!msgCount)
         msgIndex = msgScroll = 0;
-    MSG_Fetch(msgScroll, rows, lines, msgIndex, &ordinal, &messages);
+    JournalFetch(msgScroll, rows, lines, msgIndex, &ordinal, &total);
 
-    snprintf(text, sizeof text, "%u/%u", ordinal, messages);
-    DrawPageTitle("MESSAGES:", text);
+    snprintf(text, sizeof text, "%u/%u", ordinal, total);
+    DrawPageTitle(historyPocsag ? "POCSAG:" : "MESSAGES:", text);
     for (uint8_t r = 0; r < lines && msgScroll + r < msgCount; ++r) {
         const MSG_Row_t *m = &rows[r];
         const uint8_t y = top + r * 7;
         if (m->marker) {
             for (uint8_t px = 4; px < 124; px += 2)
                 gFrameBuffer[(y + 2) / 8][px] |= 1u << ((y + 2) % 8);
-        } else {
-            // "01-AB: " and the first 14 characters.
-            const uint8_t n = m->len < 14u ? m->len : 14u;
-            if (m->number && m->number <= MSG_SHOWN_MAX)
-                text[0] = '0' + m->number / 10u, text[1] = '0' + m->number % 10u;
-            else
-                text[0] = text[1] = '-';
-            text[2] = '-', text[3] = m->cs[0], text[4] = m->cs[1], text[5] = ':', text[6] = ' ';
-            memcpy(text + 7, m->text, n);
-            UI_DrawText5x5(text, 2, y, 7 + n);
-        }
+        } else
+            UI_DrawText5x5(m->line, 2, y, (uint8_t)strlen(m->line));
         if (msgScroll + r == msgIndex)
             InvertHistoryRows(y, 1);
     }
@@ -6856,7 +7184,7 @@ static NATIVE_CODE(messages) void RenderMessagesNative(void)
     if (msgAsk)
         RenderAskNative();
     else if (selectionHelp)
-        CHANNEL_DrawHistoryHelp(true);
+        CHANNEL_DrawHistoryHelp(historyPocsag ? 2 : 1);
 }
 #endif
 
@@ -6866,7 +7194,7 @@ static void RenderHistoryList(void)
     const bool messages = historyMessages;
     if (APP_NativeBegin(messages ? NATIVE_MESSAGES : NATIVE_LISTS)) {
         if (messages)
-            RenderMessagesNative();
+            RenderJournalNative();
         else
             RenderHistoryListNative();
         APP_NativeEnd();

@@ -47,11 +47,11 @@ assert rows[at - 1][:6] == b'POnMsg'  # just below POnMsg
 put8(addr('gCurrentFunction'), Q['fg'])
 low = None  # the F4HWN bits 0..2 must not depend on PONSCR
 flash[0xA00E] = 0x07
-call('SETTINGS_InitEEPROM', count=6000000)
+init_eeprom(count=6000000)
 call('SETTINGS_SaveSettings')  # settle the settings mirrored in other blocks
 for value in range(Q['count']):
     flash[0xA00E] = 0x07  # STE, NFM and VFO_OPEN set, PONSCR NORMAL
-    call('SETTINGS_InitEEPROM', count=6000000)
+    init_eeprom(count=6000000)
     put8(addr('gMenuCursor'), at)
     put32(addr('gSubMenuSelection'), value)
     call('MENU_AcceptSetting')
@@ -60,13 +60,13 @@ for value in range(Q['count']):
     low = flash[0xA00E] & 0x07 if low is None else low
     assert flash[0xA00E] & 0x07 == low and flash[0xA00E] >> 3 == value, hex(flash[0xA00E])
     put8(eep + Q['pon'], 0xEE)
-    call('SETTINGS_InitEEPROM', count=6000000)
+    init_eeprom(count=6000000)
     assert get8(eep + Q['pon']) == value
 print('PASS PONSCR: menu row below POnMsg, six values saved in 0xA00E bits 3..5 and restored', flush=True)
 
 for raw in [0xFF, 0x30 | 0x07, 0x38]:  # erased, value 6, value 7
     flash[0xA00E] = raw
-    call('SETTINGS_InitEEPROM', count=6000000)
+    init_eeprom(count=6000000)
     assert get8(eep + Q['pon']) == 0, hex(raw)
 print('PASS erased or out-of-range PONSCR reads NORMAL', flush=True)
 

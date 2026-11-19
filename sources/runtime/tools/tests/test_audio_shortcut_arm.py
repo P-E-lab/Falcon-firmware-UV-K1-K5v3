@@ -64,11 +64,11 @@ for n in ['BK4819_SetCompander', 'RADIO_SetupRegisters', 'BACKLIGHT_SetBrightnes
 flash[0x00A160:0x00A170] = b'2.3.1.D1'.ljust(16, b'\0')  # Falcon settings already initialized
 flash[0x00A0C7] = 0xFF  # update from 3.0.0: SetRxG OFF is turned ON once
 flash[0x00A0C0] = 0
-call('SETTINGS_InitEEPROM', count=200000000)
+init_eeprom(count=200000000)
 assert u.mem_read(rxg, 1)[0] == 1 and flash[0x00A0C0] == 1 and flash[0x00A0C7] == 0x31
 for stored, expect in [(0, 0), (1, 1), (0xFF, 1)]:
     flash[0x00A0C0] = stored
-    call('SETTINGS_InitEEPROM', count=200000000)
+    init_eeprom(count=200000000)
     assert u.mem_read(rxg, 1)[0] == expect, (stored, u.mem_read(rxg, 1)[0])
 put8(rxg, 0)
 call('SETTINGS_SaveSettings', count=200000000)

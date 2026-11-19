@@ -30,7 +30,6 @@ static const char ns_editor_26[] NATIVE_DATA(editor) = "000.00000  MHz";
 static const char ns_editor_27[] NATIVE_DATA(editor) = "--------";
 static const char ns_editor_28[] NATIVE_DATA(editor) = "-------";
 static const char ns_editor_29[] NATIVE_DATA(editor) = "select >";
-static const char ns_editor_30[] NATIVE_DATA(editor) = "Hz";
 static const char ns_editor_31[] NATIVE_DATA(editor) = "OFF";
 static const char ns_editor_32[] NATIVE_DATA(editor) = "BAND";
 static const char ns_editor_33[] NATIVE_DATA(editor) = "NO LIST";
@@ -868,10 +867,10 @@ static NATIVE_CODE(editor) void ChannelDisplay(void)
                 if (option < (digital ? DCS_OPTION_COUNT : ARRAY_SIZE(CTCSS_Options)) &&
                     ((digital && (type == CODE_TYPE_DIGITAL || type == CODE_TYPE_REVERSE_DIGITAL)) ||
                      (!digital && type == CODE_TYPE_CONTINUOUS_TONE))) {
-                    DCS_FormatCode(text, type, option, digital);
-                    if (!digital)
-                        strcat(text, ns_editor_30);
-                    else if (type == CODE_TYPE_REVERSE_DIGITAL)
+                    // "01-67.0", "01-D023N": the code's number in the list first.
+                    sprintf(text, "%02u-", option + 1);
+                    DCS_FormatCode(text + 3, type, option, digital);
+                    if (digital && type == CODE_TYPE_REVERSE_DIGITAL)
                         text[strlen(text) - 1] = 'I';
                 } else
                     strcpy(text, ns_editor_31);

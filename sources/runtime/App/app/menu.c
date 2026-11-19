@@ -96,11 +96,20 @@ static NATIVE_CODE(menuset) unsigned char *MENU_SimpleSetting(uint8_t id)
     return NULL;
 }
 // Store max + 1: zero marks an unsupported entry, including enum gaps.
-static const uint8_t menuLimits[MENU_SQLHYS + 1] = {
+static const uint8_t menuLimits[MENU_LAST_ID + 1] = {
     [MENU_LED] = ARRAY_SIZE(gSubMenu_LED),
     [MENU_SQL] = 10,
     [MENU_SQLSCN] = 78,
     [MENU_SQLHYS] = 9,
+    [MENU_NOILVOF] = 81,
+    [MENU_MAXRX] = SCAN_MAXRX_COUNT,
+    [MENU_RXHOLD] = SCAN_RXHOLD_COUNT,
+    [MENU_SCANPS] = SCAN_PS_COUNT,
+    [MENU_POPTIM] = SCAN_POPTIM_COUNT,
+#if defined(ENABLE_FEAT_F4HWN) && defined(ENABLE_FEAT_F4HWN_RX_TX_TIMER)
+    [MENU_SET_AUD] = ARRAY_SIZE(gSubMenu_SET_AUD_FM),
+    [MENU_SET_AUDA] = ARRAY_SIZE(gSubMenu_SET_AUD_AM),
+#endif
     [MENU_SET_CTR] = 16,
     [MENU_STEP] = STEP_N_ELEM,
     [MENU_STE] = ARRAY_SIZE(gSubMenu_OFF_ON),
@@ -167,11 +176,6 @@ int MENU_GetLimits(uint8_t menu_id, int32_t *pMin, int32_t *pMax)
     }
     switch (menu_id) {
 #if defined(ENABLE_FEAT_F4HWN) && defined(ENABLE_FEAT_F4HWN_RX_TX_TIMER)
-        case MENU_SET_AUD:
-            *pMax = gTxVfo->Modulation == MODULATION_AM    ? ARRAY_SIZE(gSubMenu_SET_AUD_AM) - 1
-                    : gTxVfo->Modulation == MODULATION_USB ? 0
-                                                           : ARRAY_SIZE(gSubMenu_SET_AUD_FM) - 1;
-            break;
         case MENU_SET_RXG:
             // forced ON by the RX expander: ON is the only choice
             *pMin = RADIO_IsRxCompanderOn(gTxVfo) ? 1 : 0;
@@ -521,10 +525,8 @@ static NATIVE_CODE(menuset) void MenuAcceptSettingNative(void)
 
 #endif
         case MENU_SET_AUD:
-            if (gTxVfo->Modulation == MODULATION_AM)
-                gSetting_set_audio_am = gSubMenuSelection;
-            else if (gTxVfo->Modulation == MODULATION_FM)
-                gSetting_set_audio_fm = gSubMenuSelection;
+        case MENU_SET_AUDA:
+            *(menuId == MENU_SET_AUD ? &gSetting_set_audio_fm : &gSetting_set_audio_am) = gSubMenuSelection;
             RADIO_SetModulation(gTxVfo->Modulation);
             break;
         case MENU_SET_RXG:
@@ -815,12 +817,10 @@ static NATIVE_CODE(menuset) void MenuShowCurrentSettingNative(void)
 
 #endif
         case MENU_SET_AUD:
-            if (gTxVfo->Modulation == MODULATION_AM)
-                gSubMenuSelection = gSetting_set_audio_am;
-            else if (gTxVfo->Modulation == MODULATION_USB)
-                gSubMenuSelection = 0;
-            else
-                gSubMenuSelection = gSetting_set_audio_fm;
+            gSubMenuSelection = gSetting_set_audio_fm;
+            break;
+        case MENU_SET_AUDA:
+            gSubMenuSelection = gSetting_set_audio_am;
             break;
         case MENU_SET_RXG:
             gSubMenuSelection = RADIO_IsRxCompanderOn(gTxVfo) ? 1 : gSetting_set_rxg;

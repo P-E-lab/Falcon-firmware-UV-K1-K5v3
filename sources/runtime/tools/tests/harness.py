@@ -156,7 +156,7 @@ def get32(a): return struct.unpack('<I', u.mem_read(a, 4))[0]
 
 # --- external store (store_layout.h) -----------------------------------------
 STORE_ASSET_BASE, STORE_ASSET_SIZE = 0x1CA000, 0x4000
-STORE_BANK_BASE, STORE_BANK_SIZE = 0x1A2000, 0x8000
+STORE_BANK_BASE, STORE_BANK_SIZE = 0x18C000, 0xC000
 store = (B / 'store.raw').read_bytes()
 
 
@@ -220,3 +220,8 @@ def install(module, slot):
     flash[base + 4096:base + 4096 + h[4]] = data[64:64 + h[4]]
     flash[base + 256:base + 256 + h[12]] = data[64 + h[4]:]
     return h
+
+
+def init_eeprom(count=50000000):
+    """SETTINGS_InitEEPROM lives in the options module (Falcon 4.0)."""
+    assert call('SETTINGS_InitEEPROM', count=count) & 1   # loads the options module itself
