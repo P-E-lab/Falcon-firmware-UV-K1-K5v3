@@ -19,6 +19,19 @@
 
 **Совместимость (4.0.0):** V4 меняет организацию внешней памяти. На одной радиостанции все Falcon, установленные в мультизагрузке, нужно переводить на V4 вместе; Falcon 3.x в другом слоте потеряет свои модули. Приложения POCSAG Scan, FCatch, FKeys и FMessage нужно обновить вместе с V4. Каналы и настройки сохраняются; используйте драйверы CHIRP 4.0.0.
 
+## Скриншоты
+
+Экраны Falcon 4.0.0 по порядку:
+
+<table>
+<tr><td align="center" width="33%"><img src="docs/screenshots/01-single-vfo-rx.png" alt="Один VFO, приём"><br>1. Один VFO, приём</td><td align="center" width="33%"><img src="docs/screenshots/02-dual-vfo-rx.png" alt="Два VFO, приём"><br>2. Два VFO, приём</td><td align="center" width="33%"><img src="docs/screenshots/03-dual-vfo-full-watch.png" alt="Два VFO, Full Watch"><br>3. Два VFO, Full Watch</td></tr>
+<tr><td align="center" width="33%"><img src="docs/screenshots/04-menu-g.png" alt="Меню G"><br>4. Меню G</td><td align="center" width="33%"><img src="docs/screenshots/05-menu-all.png" alt="Меню All"><br>5. Меню All</td><td align="center" width="33%"><img src="docs/screenshots/06-spectre-list.png" alt="Спектр, список"><br>6. Спектр, список</td></tr>
+<tr><td align="center" width="33%"><img src="docs/screenshots/07-sentinel-range.png" alt="Sentinel, диапазон"><br>7. Sentinel, диапазон</td><td align="center" width="33%"><img src="docs/screenshots/08-edit-channel-popup.png" alt="Редактирование канала, окно"><br>8. Редактирование канала, окно</td><td align="center" width="33%"><img src="docs/screenshots/09-edit-channel.png" alt="Редактирование канала"><br>9. Редактирование канала</td></tr>
+<tr><td align="center" width="33%"><img src="docs/screenshots/10-scanlist.png" alt="Списки сканирования"><br>10. Списки сканирования</td><td align="center" width="33%"><img src="docs/screenshots/11-scanlist-popup.png" alt="Список сканирования, окно"><br>11. Список сканирования, окно</td><td align="center" width="33%"><img src="docs/screenshots/12-scanlist-edit.png" alt="Список сканирования, правка"><br>12. Список сканирования, правка</td></tr>
+<tr><td align="center" width="33%"><img src="docs/screenshots/13-radio-fm.png" alt="FM-радио"><br>13. FM-радио</td><td align="center" width="33%"><img src="docs/screenshots/14-apps.png" alt="Приложения"><br>14. Приложения</td><td align="center" width="33%"><img src="docs/screenshots/15-fmessage.png" alt="FMessage"><br>15. FMessage</td></tr>
+<tr><td align="center" width="33%"><img src="docs/screenshots/16-fmessage-inbox.png" alt="FMessage, входящие"><br>16. FMessage, входящие</td><td align="center" width="33%"><img src="docs/screenshots/17-vfo-keys.png" alt="FKeys, клавиши VFO"><br>17. FKeys, клавиши VFO</td></tr>
+</table>
+
 ## Содержимое
 
 - `firmware/f4hwn.falcon-4k.v4.0.0.bin`: прошивка и автоматический установщик «всё в одном» (4.0.0: SKIP MEM, SPECTRE VFO, сон процессора, API приложений уровня 4, страница POCSAG, 30 списков; полный список изменений на первой странице руководства пользователя). Имя файла даёт «Falcon 4k» в списке мультизагрузки UV Studio.

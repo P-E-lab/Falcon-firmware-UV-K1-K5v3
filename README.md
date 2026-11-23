@@ -19,6 +19,19 @@ Firmware for UV-K1 / K5(v3), derived from [Sonic](https://github.com/Robby69400/
 
 **Compatibility (4.0.0):** V4 changes the layout of the external memory. On one radio, all the Falcon firmwares installed in multiboot must move to V4 together; a Falcon 3.x in another slot would lose its modules. The POCSAG Scan, FCatch, FKeys and FMessage apps must be updated with V4. Channels and settings are kept; use the CHIRP 4.0.0 drivers.
 
+## Screenshots
+
+Falcon 4.0.0 screens, in order:
+
+<table>
+<tr><td align="center" width="33%"><img src="docs/screenshots/01-single-vfo-rx.png" alt="Single VFO, RX"><br>1. Single VFO, RX</td><td align="center" width="33%"><img src="docs/screenshots/02-dual-vfo-rx.png" alt="Dual VFO, RX"><br>2. Dual VFO, RX</td><td align="center" width="33%"><img src="docs/screenshots/03-dual-vfo-full-watch.png" alt="Dual VFO, Full Watch"><br>3. Dual VFO, Full Watch</td></tr>
+<tr><td align="center" width="33%"><img src="docs/screenshots/04-menu-g.png" alt="Menu G"><br>4. Menu G</td><td align="center" width="33%"><img src="docs/screenshots/05-menu-all.png" alt="Menu All"><br>5. Menu All</td><td align="center" width="33%"><img src="docs/screenshots/06-spectre-list.png" alt="Spectrum, list"><br>6. Spectrum, list</td></tr>
+<tr><td align="center" width="33%"><img src="docs/screenshots/07-sentinel-range.png" alt="Sentinel, range"><br>7. Sentinel, range</td><td align="center" width="33%"><img src="docs/screenshots/08-edit-channel-popup.png" alt="Edit channel, popup"><br>8. Edit channel, popup</td><td align="center" width="33%"><img src="docs/screenshots/09-edit-channel.png" alt="Edit channel"><br>9. Edit channel</td></tr>
+<tr><td align="center" width="33%"><img src="docs/screenshots/10-scanlist.png" alt="Scan lists"><br>10. Scan lists</td><td align="center" width="33%"><img src="docs/screenshots/11-scanlist-popup.png" alt="Scan list, popup"><br>11. Scan list, popup</td><td align="center" width="33%"><img src="docs/screenshots/12-scanlist-edit.png" alt="Scan list, edit"><br>12. Scan list, edit</td></tr>
+<tr><td align="center" width="33%"><img src="docs/screenshots/13-radio-fm.png" alt="FM radio"><br>13. FM radio</td><td align="center" width="33%"><img src="docs/screenshots/14-apps.png" alt="Apps"><br>14. Apps</td><td align="center" width="33%"><img src="docs/screenshots/15-fmessage.png" alt="FMessage"><br>15. FMessage</td></tr>
+<tr><td align="center" width="33%"><img src="docs/screenshots/16-fmessage-inbox.png" alt="FMessage, inbox"><br>16. FMessage, inbox</td><td align="center" width="33%"><img src="docs/screenshots/17-vfo-keys.png" alt="FKeys, VFO keys"><br>17. FKeys, VFO keys</td></tr>
+</table>
+
 ## Contents
 
 - `firmware/f4hwn.falcon-4k.v4.0.0.bin`: firmware and all-in-one automatic installer (4.0.0: SKIP MEM, SPECTRE VFO, CPU sleep, app API level 4, POCSAG page, 30 lists; full changelog on the first page of the user guide). The file name gives "Falcon 4k" in the UV Studio multiboot list.
