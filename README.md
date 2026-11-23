@@ -10,8 +10,18 @@ Firmware for UV-K1 / K5(v3), derived from [Sonic](https://github.com/Robby69400/
 - Spectrum and Sentinel scan lists, bands or ranges, with a History of up to 200 detections and blacklists; Spectrum adds a waterfall (key 8) and a zoom around the last reception (key 4).
 - SKIP MEM (key 7) hides the frequencies already in memory in Spectrum and Sentinel; SPECTRE VFO opens Spectrum around the VFO frequency; the processor sleeps between tasks for a longer battery life.
 - Channels, lists and bands can be created and edited directly from the keypad.
-- Falcon apps: FMessage sends and receives 64-character FSK text messages between radios; messages are saved on the radio, accessible from the VFO (MESSAGES shortcut) or with the FMessage app (VFO shortcut also available). It sends a call with a melody and shows which radios are present with the app open (melody and callsign set in FMessageOption); each radio that acknowledged the last message is marked with a +. FCatch (Close Call capture) for VHF and UHF signals, FirstAid, FSurvival and FMorse for emergency situations, FGuide (firmware keys and shortcuts guide), FSystemInfo, and FSnake (open walls, keys 3/7 for both directions) complete the F4HWN catalogue.
-- POCSAG Scan (1200 / 512 bauds, 512 characters, journal in the History) and FKeys (reassign the long and F+ keys) join the Falcon apps; the app API is at level 4, compatible with F4HWN v7.
+- Falcon apps (app API level 4, compatible with F4HWN v7):
+  - **FKeys**: reassigns the long and F+ keys of the VFO screen. Pick a preset (FALCON, F4HWN or SONIC) or set each key yourself; the CHIRP 4.0.0 drivers can edit the same key table.
+  - **FMessage**: 64-character FSK text messages between radios.
+    - Messages are saved on the radio and can be opened from the VFO (MESSAGES shortcut) or from the app.
+    - Calls with a melody that tells who is calling, and shows which radios have the app open (melody and callsign set in FMessageOption).
+    - Each radio that acknowledged the last message is marked with a +.
+  - **POCSAG Scan**: pager messages at 1200 / 512 bauds, up to 512 characters, journal in the History.
+  - **FCatch**: Close Call capture of VHF and UHF signals.
+  - **FirstAid**, **FSurvival** and **FMorse**: for emergency situations.
+  - **FGuide**: guide to the firmware's keys and shortcuts.
+  - **FSystemInfo**: system information.
+  - **FSnake**: open walls, keys 3/7 for both directions.
 - One-file install, multiboot with Sonic and F4HWN (apps supported), and two editions: Falcon 4K (4096 channels) and Falcon 1K (1024 channels with their own settings).
 - Falcon firmware is coded using Claude Code.
 
