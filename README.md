@@ -4,12 +4,14 @@
 
 Firmware for UV-K1 / K5(v3), derived from [Sonic](https://github.com/Robby69400/Sonic) and compatible with [F4HWN](https://github.com/armel/uv-k1-k5v3-firmware-custom) (64 app slots).
 
-- Clear screens, Keys Infos help on F (#), and two scan speeds: Normal for reliable detection (~300 channels/s) and FastScan to sweep many channels quickly (~500 channels/s).
-- Full Watch follows both VFOs and up to four priority channels; Multilist Watch scans your memory lists in the background.
-- Scan straight from the VFO: Long * scans the channel's list, F + * scans all channels in FastScan, with A and B in frequency mode Long * scans the range between them, and the BAND SCAN shortcut scans a saved band, keeping the VFO display.
-- Spectrum and Sentinel scan lists, bands or ranges, with a History of up to 200 detections and blacklists; Spectrum adds a waterfall (key 8) and a zoom around the last reception (key 4).
-- SKIP MEM (key 7) hides the frequencies already in memory in Spectrum and Sentinel; SPECTRE VFO opens Spectrum around the VFO frequency; the processor sleeps between tasks for a longer battery life.
+- Falcon turns the UV-K1 / K5(v3) into a fast, full-featured scanner and receiver, with the tools to find, follow and decode what is on the air. Everything stays practical and readable.
 - Channels, lists and bands can be created and edited directly from the keypad.
+- A very fast scanner: Normal scan sweeps about 300 channels per second, and FastScan reaches about 500 channels per second, so a whole memory of hundreds of channels goes by in seconds.
+- Scan straight from the VFO: Long * scans the channel's list, F + * scans all channels in FastScan, with A and B in frequency mode Long * scans the range between them, and the BAND SCAN shortcut scans a saved band, keeping the VFO display; the SPECTRE VFO shortcut opens Spectrum around the VFO frequency.
+- Full Watch follows both VFOs and up to four priority channels; Multilist Watch scans your memory lists in the background.
+- Spectrum and Sentinel scan lists, bands or ranges, with a History of up to 200 detections and blacklists; Spectrum adds a waterfall (key 8) and a zoom around the last reception (key 4).
+- SKIP MEM (key 7) hides the frequencies already in memory in Spectrum and Sentinel, to find new frequencies.
+- Clear screens, with a Keys Infos page on F (#) that lists what each key does on the current screen.
 - Falcon apps (app API level 4, compatible with F4HWN v7):
   - **FKeys**: reassigns the long and F+ keys of the VFO screen. Pick a preset (FALCON, F4HWN or SONIC) or set each key yourself; the CHIRP 4.0.0 drivers can edit the same key table.
   - **FMessage**: 64-character FSK text messages between radios.

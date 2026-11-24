@@ -4,12 +4,14 @@
 
 Firmware para UV-K1 / K5(v3), derivado de [Sonic](https://github.com/Robby69400/Sonic) y compatible con [F4HWN](https://github.com/armel/uv-k1-k5v3-firmware-custom) (64 slots de apps).
 
-- Pantallas claras, ayuda Keys Infos en F (#) y dos velocidades de escaneo: Normal para una detección fiable (~300 canales/s) y FastScan para barrer muchos canales rápidamente (~500 canales/s).
-- Full Watch sigue los dos VFO y hasta cuatro canales prioritarios; Multilist Watch escanea tus listas de memorias en segundo plano.
-- Escaneo directo desde el VFO: Long * escanea la lista del canal, F + * escanea todos los canales en FastScan, con A y B en modo frecuencia Long * escanea el rango entre ambos, y el atajo BAND SCAN escanea una banda guardada, manteniendo la pantalla del VFO.
-- El Espectro y Sentinel escanean listas, bandas o rangos, con un Historial de hasta 200 detecciones y listas negras; el Espectro añade una cascada (tecla 8) y un zoom alrededor de la última recepción (tecla 4).
-- SKIP MEM (tecla 7) oculta las frecuencias que ya están en memoria en el Espectro y Sentinel; SPECTRE VFO abre el Espectro alrededor de la frecuencia del VFO; el procesador duerme entre tareas para una mayor autonomía.
+- Falcon convierte el UV-K1 / K5(v3) en un escáner y receptor rápido y completo, con las herramientas para encontrar, seguir y decodificar lo que hay en el aire. Todo sigue siendo práctico y legible.
 - Los canales, listas y bandas se pueden crear y editar directamente desde el teclado.
+- Un escáner muy rápido: el escaneo Normal recorre unos 300 canales por segundo y FastScan alcanza unos 500 canales por segundo; una memoria entera de cientos de canales pasa en segundos.
+- Escaneo directo desde el VFO: Long * escanea la lista del canal, F + * escanea todos los canales en FastScan, con A y B en modo frecuencia Long * escanea el rango entre ambos, y el atajo BAND SCAN escanea una banda guardada, manteniendo la pantalla del VFO; el atajo SPECTRE VFO abre el Espectro alrededor de la frecuencia del VFO.
+- Full Watch sigue los dos VFO y hasta cuatro canales prioritarios; Multilist Watch escanea tus listas de memorias en segundo plano.
+- El Espectro y Sentinel escanean listas, bandas o rangos, con un Historial de hasta 200 detecciones y listas negras; el Espectro añade una cascada (tecla 8) y un zoom alrededor de la última recepción (tecla 4).
+- SKIP MEM (tecla 7) oculta las frecuencias que ya están en memoria en el Espectro y Sentinel, para encontrar frecuencias nuevas.
+- Pantallas claras, con una página Keys Infos en F (#) que indica la función de cada tecla en la pantalla actual.
 - Apps de Falcon (API de apps nivel 4, compatible con F4HWN v7):
   - **FKeys**: reasigna las teclas largas y F+ de la pantalla VFO. Elige un preset (FALCON, F4HWN o SONIC) o ajusta cada tecla tú mismo; los drivers CHIRP 4.0.0 editan la misma tabla de teclas.
   - **FMessage**: mensajes de texto de 64 caracteres en FSK entre radios.
